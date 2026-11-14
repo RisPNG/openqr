@@ -1,0 +1,37 @@
+{
+  "qrcodegen": {
+    "repository": "https://github.com/nayuki/QR-Code-generator",
+    "revision": "bcfe1b018cec5f1f91b5705eca5bb4cdd34e9f8d",
+    "files": ["cpp/qrcodegen.cpp", "cpp/qrcodegen.hpp"],
+    "license": "LICENSE.qrcodegen",
+    "changes": "Retain semantic module roles, remainder locations, interleaved RS codeword ownership, correction capacities, and data capacity through explicit encoder metadata accessors. Preserve Segno 1.6.6's post-terminator zero codeword on an already aligned boundary when capacity remains, so fixed-mask and seeded artwork outputs retain source parity. Other encoding algorithms and tables remain upstream implementations."
+  },
+  "pocketfft": {
+    "repository": "https://github.com/mreineck/pocketfft",
+    "revision": "4d865cba24359b05b37da4e75aee24498c3b78e7",
+    "files": ["pocketfft_hdronly.h"],
+    "license": "LICENSE.pocketfft",
+    "changes": "Unmodified header; planner disables internal multithreading and requests one thread."
+  },
+  "numpy-random": {
+    "repository": "https://github.com/numpy/numpy",
+    "revision": "c3d60fc8393f3ca3306b8ce8b6453d43737e3d90",
+    "version": "2.3.5",
+    "files": ["numpy/random/src/pcg64/pcg64.h", "numpy/random/bit_generator.pyx"],
+    "licenses": ["LICENSE.numpy-random", "LICENSE.numpy-seed-sequence", "pcg64.h"],
+    "changes": "Unmodified PCG64 header. SeedSequence's single-uint32, four-word-pool, unspawned initialization is ported to src/random.hpp for source-compatible artwork tie values."
+  },
+  "cpython-random": {
+    "repository": "https://github.com/python/cpython",
+    "version": "3.11.14",
+    "files": ["Modules/_randommodule.c", "Lib/random.py"],
+    "licenses": ["LICENSE.cpython", "LICENSE.mt19937"],
+    "changes": "MT19937 integer initialization and draws, getrandbits, and rejection-sampled shuffle are ported to src/random.hpp for uint64 search seeds."
+  },
+  "oracle-vectors": {
+    "file": "../tests/planner_vectors.hpp",
+    "sources": ["CPython 3.11.14", "NumPy 2.3.5", "Segno 1.6.6", "branded_qr/mosaic.py"],
+    "encoding": "QR Model 2, fixed mask 5, explicit version and ECC, boosting disabled; non-ASCII payloads use UTF-8 ECI 26.",
+    "hash": "FNV-1a uint64 over each matrix element, channel, or integer metadata entry in order."
+  }
+}

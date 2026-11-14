@@ -1,0 +1,11 @@
+The URL Unicode property tables use the Python 3.11 Unicode 14.0.0 database. The Punycode variable-integer, bias adaptation, and insertion algorithms follow the Python 3.11 encodings.punycode implementation.
+
+Source: https://github.com/python/cpython/tree/v3.11.14
+License: LICENSE in this directory.
+
+The Unicode character properties are covered by LICENSE.unicode in this directory.
+
+Unicode 14.0.0 data: https://www.unicode.org/Public/14.0.0/ucd/ReadMe.txt
+Unicode data terms: https://www.unicode.org/copyright.html
+Unicode License v3: https://www.unicode.org/license.txt
+The Unicode data terms identify all Unicode Data Files as covered by Unicode License v3 unless another licence is identified at release. The Unicode 14.0.0 ReadMe directs users to the Unicode terms of use.

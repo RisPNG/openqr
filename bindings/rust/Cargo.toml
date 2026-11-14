@@ -1,0 +1,11 @@
+[package]
+name = "openqr"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+links = "openqr"
+build = "build.rs"
+description = "Safe Rust access to the OpenQR native engine"
+
+[lib]
+path = "src/lib.rs"

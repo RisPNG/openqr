@@ -1,0 +1,6 @@
+Source: https://github.com/python-pillow/Pillow/tree/7533ff222598f4745487b402dfb58f39b438288b
+Files: src/libImaging/QuantOctree.c, src/libImaging/QuantOctree.h, src/libImaging/QuantTypes.h, and src/libImaging/ImagingUtils.h
+The four source files are unmodified and compile as C without the Python runtime.
+src/image.cpp adapts the Lanczos and box coefficient calculation, fixed-point resampling, alpha composition, padding, and enhancement behaviour from Pillow's Resample.c, AlphaComposite.c, Blend.c, ImageOps.py, and ImageEnhance.py.
+The adapted implementation uses OpenQR's RGBA image and animation model, bounds intermediate image allocations, and retains Pillow's radius-3 Lanczos filter.
+Licence: LICENSE in this directory.

@@ -1,0 +1,7 @@
+/build/
+/out/
+/dist/
+__pycache__/
+*.pyc
+.venv/
+/bindings/rust/target/

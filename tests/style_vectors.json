@@ -1,0 +1,72 @@
+{
+  "source": {
+    "file": "branded_qr/rendering.py",
+    "sha256": "e912be9a35c4d129698ed219cdfbfc83d33b02673c5b3a2e1f869bd1a136ab22",
+    "operation": "render_style_preview",
+    "normalization": "Parse SVG elements in drawing order, compare geometry numbers rounded to seven decimal places, and hash the normalized geometry with SHA-256."
+  },
+  "geometry": {
+    "body": {
+      "square": "d176ebd6bc8c163c232d1765857dc80f56e916c726f733cc9a5ce9e7ac21ce02",
+      "rounded": "0186b89ca2ef209ffc2d76230b036147af62ab05d6bb35ec849d05b463b04ada",
+      "circle": "9aecd33d15742f39ac2ce3eab7b87eb7901b7f97dab90189c4c95777fa062c17",
+      "small-dots": "28ab22f708c1b4d4b2956396e10b0f2d28a901a163284dfc9791cd0d4e3a3ba9",
+      "random-dots": "524716a47ff1ab6e936b20798b054b58fbfd10386f19f675d394b99dc3f7d930",
+      "diamond": "9a24c3277b44bc091a6a4ffe51ccc3d755cd8a1a795b90a6398f72393759ab10",
+      "horizontal": "2d02abc2bbae816b92012f54cfba09ac4b12a55abedacae29a69ecfd09d616e0",
+      "vertical": "ac0328ea4efc45de624085ceeffb98b97a84c51b5e391461e726bd1b9a7ad94e",
+      "connected-rounded": "148d16f0345365cc76a132d427dbb469d934fe38c1329bdd23ddadc0eb408cd5",
+      "mosaic": "23894c041377b88baf564365ebcaf1d3fd1dfbfd618adef5582e2c81da0c95e8",
+      "classy": "7856fa8c05e7ca88455c855992ef5482ac50650dbc8546e5da5596d7b63272a9",
+      "leaf": "0cf3fbb2800860442bbbd1e83acc0621dc3f96ec577e8ac5476b78aafe4743c8",
+      "teardrop": "730b6a5a4816a4bbc568753efe94fd57d9d914081f0cf7d334d3eb05db5a1c37",
+      "cut-corners": "b277a46af58b7fa4437c9579a8976b6a58848bbb0cf6bfff7e28d4af3342f47c",
+      "kite": "d84df357b842b0e574778f6cd3e13cf7c666150c49f0fb79454b06b9ed1f0dfb",
+      "diagonal": "ec3f41b728a9ee40d6be6e6a11b244df3f7f2a628719bae3bfe508107f3fc41a",
+      "triangle": "1544e5755a1928474f9948ae62dcc9dd4e7df5543deb792e7d065eba26867f27",
+      "star": "5098821e259b3485540303ecb0081965e96108a24404e5f904c89812b05fa5f1",
+      "cross": "58020ee01a35a2cfc06fb75ff725174c39da396427d3b47322b87f29e3fefaed",
+      "inset-square": "f04140e8ac8c2c7f8f1cb6b1e20c813a8309d5eb93f150db95fabd56f73cdc92",
+      "horizontal-bars": "ff25ed1779cebaebe8e786b9c553a12c152e4b52f5d2fbc466a918479979342e",
+      "vertical-bars": "895abb0d0aa5be1db61d3fc9dbbeb18ef5f19c2108fce5c5de712c7e6ead5a0e"
+    },
+    "eye_frame": {
+      "rounded-dots": "74e0ad8ca94c5831becf6c80a87c1217fb5acf0f561aa10ab84e5a8f913cf0d8",
+      "square": "935297a190e7d35c6d5f4050662e69d9d62d41f2f9406553e8a2e5f3a6109708",
+      "rounded": "204cdea73fbc24efe66dc4e0f2a67fbb541604754992f3a04d6f92b6dbd72265",
+      "circle": "047795b3c02981749a6316d1320c70a7651521dd3c3e39b876dcd5cf39da4851",
+      "rounded-top-left": "57ea33c814c5da944cf31f983b08f9b7a2d1741530472917d5e43ea9faf2c89e",
+      "rounded-top-right": "003467ae3dad0a2cf1889680ac89f0fe4b930ec2f14aaf0d91e6aabb56b58584",
+      "rounded-bottom-left": "249217a69083f0c824bb72834a5a3435c9e79cf62ff8717be526d7a60804901c",
+      "rounded-bottom-right": "5ae5c02b220de032cbbcfe9720c72d98cae41d1beb7f2a40aa40428fd4ef1e19",
+      "leaf": "5d813738bca0197a0e77fb20e79d897f40a2d41545f5009123619104279c726f",
+      "leaf-reverse": "dc7f278e547126d976af0abf7d27a3eef4cac57d02ab73527f58df5b237ae88e",
+      "octagon": "1a56a802f63fa074a2be24743e1730803a864fa797cbf3b72af66facec74c5de",
+      "dots": "95fca82939068c1d207569eeb0c88c37d2720269d8fc455de7dc9ad4e1e7556f",
+      "dashed": "e2e898dc57dd0e7affcf5a27bb06473b555c3b5c3e7844367cbfca1139f2d1a9",
+      "slanted": "e6d3953d9dcf3c9238c55e950ef3495291781215a9abd9a99e520d2745ba3d20",
+      "concave": "93c25be8a1a980cbd8c1af3e07b4352620a7f372c9a530676427f83addd7e64d",
+      "scalloped": "2e90f2965a199b6fb4de1d545c2844ee76b6b00854cb3508149a969b3e1c4362"
+    },
+    "eye_ball": {
+      "square": "f541a7b3659a663137f1c9ab6aeed8ae1d8adedf409beb3f4a05bca458e58c16",
+      "rounded": "424f5276c5b76adc8a14caf3408f67f3b781bb6aaf646ff91e433dd9dafe5b63",
+      "circle": "b23f72f3af3bef7651ef559a28707256cca3923be1d0a9607b85b5908a6837a9",
+      "dots": "246d0f9fbaf47506ee54834a0fcd2150db163e2296301b6d30c04e3d26df1a1d",
+      "small-dots": "42ce35a422010449be63f69abf3d24e9bb6e3290ab53c7d377338bd43f84a896",
+      "leaf": "1ba725b16abec6ef470cb632b63da62edab48259b2b1327fc345c67dc1fa3eb9",
+      "leaf-reverse": "3ce929cb16767e82e437d97875fd43d1fe4c5eebeea4b59a2573ed5c2b8838f9",
+      "rounded-top-left": "92559e6534774cefa40d492701b3d27cf6a0b6aefa45203ef55c36c545655de7",
+      "rounded-bottom-right": "e3c3e10481a26524bbfc145f0ca71714f72976787896dcb95664d320110cf89d",
+      "octagon": "9a1e3704946c586ec84e7882ad430457aa61d1497199d8c4946328c5ed8bfcaf",
+      "diamond": "c751168ff7c703bdaf7367163e72f9a64b2f752fe4309857fe6c0d902c49cc37",
+      "vertical-bars": "93f0f367b8998dbfcb030c63cf18804d46915425db0eead6461d1218b2d593a3",
+      "horizontal-bars": "d7915aeb2d9e1384c5a7c1e0a3d3cdfa08ea6fed4cefa32406d5a4b3c8693b7a",
+      "slanted": "5ec52009856dfa6f9f897b8971f548abc667b5b66f9055199767f86dfa4f8cb0",
+      "diagonal-cut": "5df2fdae3544401c0f4d0888150d022ef959a908caa6e4ff44f2ecd62aca0526",
+      "concave": "a6b72e1d7d0cebfd94bd4a538e3a145536e30a4a522994fe036a37a93d58389c",
+      "soft-star": "72bffd1ec1ea02cca1c59fd0782c428d8f3b5caa07777102c4d5b1c989f012c0",
+      "cross": "e34fc704e943ebd5850b881f25a1d692dff6dc68a31cfeed466abac05b96422a"
+    }
+  }
+}

@@ -1,0 +1,74 @@
+name: native
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: x86_64
+            configure: ""
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+            configure: ""
+          - runner: windows-2025
+            architecture: x86_64
+            configure: "-A x64"
+          - runner: windows-11-arm
+            architecture: arm64
+            configure: "-A ARM64"
+          - runner: macos-15-intel
+            architecture: x86_64
+            configure: ""
+          - runner: macos-15
+            architecture: arm64
+            configure: ""
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db
+      - name: Configure
+        run: mise exec -- cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.configure }}
+      - name: Build
+        run: mise exec -- cmake --build build --config Release --parallel 2
+      - name: Test native behavior and reference fixtures
+        run: mise exec -- ctest --test-dir build -C Release --output-on-failure
+      - name: Install test dependencies
+        if: matrix.architecture == 'x86_64'
+        run: mise exec -- uv venv build/test-env
+      - name: Synchronize test dependencies
+        if: matrix.architecture == 'x86_64'
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then python=build/test-env/Scripts/python.exe; else python=build/test-env/bin/python; fi
+          mise exec -- uv pip sync --python "$python" --require-hashes tests/requirements.txt
+      - name: Test public API and CLI with independent decoding
+        if: matrix.architecture == 'x86_64'
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then python=build/test-env/Scripts/python.exe; else python=build/test-env/bin/python; fi
+          mise exec -- "$python" -m pytest -q -p no:cacheprovider --basetemp=build/test-tmp tests
+      - name: Install native SDK
+        run: mise exec -- cmake --install build --config Release --prefix dist --component OpenQR
+      - name: Configure an installed SDK consumer
+        run: mise exec -- cmake -S tests/sdk -B build/sdk -DCMAKE_PREFIX_PATH="${{ github.workspace }}/dist" ${{ matrix.configure }}
+      - name: Build the installed SDK consumer
+        run: mise exec -- cmake --build build/sdk --config Release --parallel 2
+      - name: Test the installed SDK consumer
+        run: mise exec -- ctest --test-dir build/sdk -C Release --output-on-failure
+      - name: Package native SDK
+        run: mise exec -- cmake -E tar cfz openqr-${{ runner.os }}-${{ matrix.architecture }}.tar.gz --format=gnutar dist
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: openqr-${{ runner.os }}-${{ matrix.architecture }}
+          path: openqr-${{ runner.os }}-${{ matrix.architecture }}.tar.gz
+          if-no-files-found: error
