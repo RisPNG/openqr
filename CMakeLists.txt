@@ -85,6 +85,8 @@ if(OPENQR_BUILD_TESTS)
     add_test(NAME planner COMMAND openqr_planner_test)
 endif()
 
+include(cmake/BuildIdentity.cmake)
+
 if(OPENQR_BUILD_ELIXIR)
     set(OPENQR_ELIXIR_BINDING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bindings/elixir" CACHE PATH "Elixir binding source directory")
     add_subdirectory("${OPENQR_ELIXIR_BINDING_DIR}" bindings/elixir)
@@ -102,13 +104,17 @@ install(DIRECTORY include/openqr DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONE
 install(EXPORT OpenQRTargets NAMESPACE OpenQR:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenQR COMPONENT OpenQR)
 configure_package_config_file(cmake/OpenQRConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/OpenQRConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenQR)
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenQR
+    PATH_VARS CMAKE_INSTALL_DATADIR)
 write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/OpenQRConfigVersion.cmake
     VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenQRConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/OpenQRConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenQR COMPONENT OpenQR)
 install(FILES README.md THIRD_PARTY.md DESTINATION share/openqr COMPONENT OpenQR)
+install(FILES dev/README.md DESTINATION share/openqr/dev COMPONENT OpenQR)
+install(FILES "${OpenQR_BUILD_ID_FILE}" DESTINATION ${CMAKE_INSTALL_DATADIR}/openqr
+    COMPONENT OpenQR)
 install(DIRECTORY bindings/ DESTINATION share/openqr/bindings COMPONENT OpenQR
     PATTERN "_build" EXCLUDE PATTERN "target" EXCLUDE PATTERN "priv" EXCLUDE
     PATTERN "bin" EXCLUDE PATTERN "obj" EXCLUDE PATTERN "__pycache__" EXCLUDE)

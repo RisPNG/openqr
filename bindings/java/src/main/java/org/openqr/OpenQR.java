@@ -40,6 +40,7 @@ public final class OpenQR {
         public int scale = 12;
         public int recoveryMargin = 2;
         public Long seed = null;
+        public Character errorCorrection = null;
         public boolean color = true;
         public boolean varyUrl = false;
         public boolean randomizeSeed = false;
@@ -175,6 +176,13 @@ public final class OpenQR {
                 request.set(JAVA_LONG, offset + BYTES.byteOffset(groupElement("size")), inputs[index].length);
             }
             int flags = (options.color ? 1 : 0) | (options.varyUrl ? 2 : 0) | (options.seed != null ? 4 : 0) | (options.randomizeSeed ? 8 : 0);
+            flags |= options.errorCorrection == null ? 0 : switch (options.errorCorrection) {
+                case 'L' -> 16;
+                case 'M' -> 32;
+                case 'Q' -> 64;
+                case 'H' -> 128;
+                default -> throw new IllegalArgumentException("Error correction must be L, M, Q, H, or null for automatic selection.");
+            };
             nativeOptions.set(JAVA_INT, OPTIONS.byteOffset(groupElement("version")), options.version);
             nativeOptions.set(JAVA_INT, OPTIONS.byteOffset(groupElement("scale")), options.scale);
             nativeOptions.set(JAVA_INT, OPTIONS.byteOffset(groupElement("recovery_margin")), options.recoveryMargin);

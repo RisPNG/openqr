@@ -100,13 +100,34 @@ def test_each_published_style_produces_a_verified_artifact(engine, category):
 @pytest.mark.parametrize("category", ["body", "eye_frame", "eye_ball"])
 def test_style_previews_match_source_geometry_and_own_their_memory(engine, category):
     vectors = json.loads((Path(__file__).parent / "style_vectors.json").read_text())["geometry"][category]
-    assert set(engine.styles(category)) == set(vectors)
+    assert set(engine.styles(category)) - {"follow-body"} == set(vectors)
     previews = [engine.style_preview(category, key) for key in vectors]
     for (key, expected), preview in zip(vectors.items(), previews):
         assert vector_geometry_digest(preview) == expected, (category, key)
         root = ET.fromstring(preview)
         assert root.attrib["width"] == root.attrib["height"] == "88"
     assert len(set(previews)) == len(previews)
+
+
+@pytest.mark.parametrize("eyes, modules", [({"eye_frame": "follow-body"}, 24), ({"eye_ball": "follow-body"}, 9), ({"eye_frame": "follow-body", "eye_ball": "follow-body"}, 33)])
+def test_follow_body_eyes_preserve_finder_modules_with_selected_body_geometry(engine, eyes, modules):
+    entry = engine.generate("https://openqr.my", version=8, scale=3, seed=42, body_shape="circle", **eyes).results[0]
+    decode_frames(entry.image, entry.payload)
+    vector = ET.fromstring(entry.svg)
+    finder_modules = [element for element in vector if element.tag.endswith("}ellipse") and 4 <= float(element.attrib["cx"]) < 11 and 4 <= float(element.attrib["cy"]) < 11]
+    assert len(finder_modules) == modules
+    assert all(float(element.attrib["rx"]) == float(element.attrib["ry"]) == 0.5 for element in finder_modules)
+    assert entry.verified_frames == entry.total_frames == 1
+    assert entry.changed_codewords == 0
+
+
+def test_follow_body_eyes_keep_existing_rounded_module_geometry(engine):
+    legacy = engine.generate("https://openqr.my", version=3, scale=3, seed=42).results[0]
+    inherited = engine.generate("https://openqr.my", version=3, scale=3, seed=42, eye_frame="follow-body", eye_ball="follow-body").results[0]
+    assert inherited.image == legacy.image
+    assert inherited.svg == legacy.svg
+    assert engine.style_preview("eye_frame", "follow-body") == engine.style_preview("eye_frame", "rounded-dots")
+    assert engine.style_preview("eye_ball", "follow-body") == engine.style_preview("eye_ball", "dots")
 
 
 @pytest.mark.parametrize("payload", [b" leading and trailing \t\r\n", b"a\x00b\x01\x1f", "Contact: \u674e\u534e, caf\u00e9@\u4f8b\u5b50.test", "https://example.com/page?x=%20&y=1#exact"])
@@ -246,6 +267,26 @@ def test_invalid_options_are_rejected_by_the_shared_native_contract(engine, opti
         engine.generate("QR", version=3, **options)
 
 
+@pytest.mark.parametrize("correction", ["L", "M", "Q", "H"])
+def test_requested_error_correction_is_used_without_boosting(engine, correction):
+    entry = engine.generate("QR", version=3, scale=3, seed=42, error_correction=correction).results[0]
+    assert entry.error_correction == correction
+    assert entry.payload == b"QR"
+    decode_frames(entry.image, entry.payload)
+
+
+@pytest.mark.parametrize("correction", ["", "A", "low", False, 3, b"L"])
+def test_invalid_error_correction_is_rejected(engine, correction):
+    with pytest.raises(ValueError, match="error_correction"):
+        engine.generate("QR", version=3, scale=3, error_correction=correction)
+
+
+def test_omitted_and_automatic_error_correction_match(engine):
+    implicit = engine.generate("QR", version=3, scale=3, seed=42)
+    automatic = engine.generate("QR", version=3, scale=3, seed=42, error_correction=None)
+    assert automatic == implicit
+
+
 def test_result_memory_is_owned_by_python_and_engine_calls_are_concurrent(engine):
     requests = [(f"concurrent-{index}".encode(), index) for index in range(8)]
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -267,3 +308,16 @@ def test_batch_reports_overflowed_versions_without_losing_successes(engine):
     assert successful | skipped == set(range(1, 41))
     assert all(entry.reason for entry in batch.skipped)
     decode_frames(batch.results[-1].image, payload.encode())
+
+
+def test_batch_reports_unreadable_designs_without_losing_verified_versions(engine):
+    batch = engine.generate("https://openqr.my", seed=42, scale=3, body_shape="classy", eye_frame="scalloped", eye_ball="cross")
+    successful = {entry.version for entry in batch.results}
+    skipped = {entry.version for entry in batch.skipped}
+    assert successful and skipped
+    assert successful.isdisjoint(skipped)
+    assert successful | skipped == set(range(1, 41))
+    assert all(re.fullmatch(r"No verified layout was found after \d+ attempts with the selected design\.", entry.reason) for entry in batch.skipped)
+    for entry in batch.results:
+        assert entry.verified_frames == entry.total_frames == 1
+        decode_frames(entry.image, entry.payload)

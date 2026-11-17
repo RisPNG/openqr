@@ -13,6 +13,7 @@ defmodule OpenQR.Engine do
   end
 
   def generate_native(_payload, _options), do: :erlang.nif_error(:nif_not_loaded)
+  def inspect_image(_encoded, _expected_payload), do: :erlang.nif_error(:nif_not_loaded)
   def styles(_category), do: :erlang.nif_error(:nif_not_loaded)
   def style_preview(_category, _style), do: :erlang.nif_error(:nif_not_loaded)
 end

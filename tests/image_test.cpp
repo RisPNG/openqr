@@ -29,6 +29,7 @@ int main() {
             first.pixels[i] = static_cast<std::uint8_t>(i * 3);
             first.pixels[i + 1] = 30;
             first.pixels[i + 2] = 70;
+            first.pixels[i + 3] = static_cast<std::uint8_t>(255 - (i / 4) % 4 * 85);
         }
         auto png = openqr::decode_image(openqr::encode_png(first));
         if (png.frames.size() != 1 || png.frames.front().image.pixels != first.pixels)

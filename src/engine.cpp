@@ -29,7 +29,6 @@
 #include <string_view>
 
 namespace openqr {
-namespace {
 
 bool verify_frames(const Animation& animation, std::span<const std::uint8_t> payload) {
     for (const auto& frame : animation.frames) {
@@ -50,6 +49,8 @@ bool verify_frames(const Animation& animation, std::span<const std::uint8_t> pay
     }
     return !animation.frames.empty();
 }
+
+namespace {
 
 bool can_vary_url(std::span<const std::uint8_t> payload) {
     const std::string_view text(reinterpret_cast<const char*>(payload.data()), payload.size());
@@ -276,7 +277,16 @@ Batch generate(const openqr_request& request) {
     if (!std::isfinite(options.contrast) || options.contrast < .1 || options.contrast > 3) throw std::invalid_argument("Contrast must be between 0.1 and 3.");
     if (!std::isfinite(options.brightness) || options.brightness < .1 || options.brightness > 3) throw std::invalid_argument("Brightness must be between 0.1 and 3.");
     if ((options.background_rgba & 255) != 0 && (options.background_rgba & 255) != 255) throw std::invalid_argument("Use a solid background color or transparent.");
-    if (options.flags & ~(OPENQR_COLOR | OPENQR_VARY_URL | OPENQR_SEED_SET | OPENQR_RANDOMIZE_SEED)) throw std::invalid_argument("Unknown OpenQR option flags.");
+    if (options.flags & ~(OPENQR_COLOR | OPENQR_VARY_URL | OPENQR_SEED_SET | OPENQR_RANDOMIZE_SEED | OPENQR_ERROR_CORRECTION_MASK)) throw std::invalid_argument("Unknown OpenQR option flags.");
+    const auto correction_flags = options.flags & OPENQR_ERROR_CORRECTION_MASK;
+    if (correction_flags && (correction_flags & (correction_flags - 1))) throw std::invalid_argument("Choose one error correction level.");
+    char selected_correction = 0;
+    switch (correction_flags) {
+        case OPENQR_ERROR_CORRECTION_L: selected_correction = 'L'; break;
+        case OPENQR_ERROR_CORRECTION_M: selected_correction = 'M'; break;
+        case OPENQR_ERROR_CORRECTION_Q: selected_correction = 'Q'; break;
+        case OPENQR_ERROR_CORRECTION_H: selected_correction = 'H'; break;
+    }
     const std::array selected_styles{options.body_shape, options.eye_frame, options.eye_ball};
     const std::array catalogs{body_styles(), eye_frame_styles(), eye_ball_styles()};
     for (std::size_t i = 0; i < catalogs.size(); ++i) {
@@ -328,6 +338,7 @@ Batch generate(const openqr_request& request) {
         std::uint32_t attempts = 0;
         bool accepted = false;
         for (const char correction : {'H', 'Q', 'M', 'L'}) {
+            if (selected_correction && correction != selected_correction) continue;
             QrCode base;
             try { base = encode_qr(payload, version, correction); }
             catch (const std::length_error&) { continue; }
@@ -390,20 +401,21 @@ Batch generate(const openqr_request& request) {
                     for (auto& layout : layouts) {
                         ++attempts;
                         Animation rendered;
-                        std::string svg;
+                        std::optional<MosaicScene> mosaic;
                         rendered.loop = reference.loop;
                         if (layout.design) {
                             if (level != 20) layout.design->colors = colors;
-                            auto mosaic = render_mosaic(*layout.design, static_cast<int>(options.scale), options.body_shape, options.eye_frame, options.eye_ball);
-                            rendered.frames.push_back({std::move(mosaic.image), 100});
-                            svg = std::move(mosaic.svg);
+                            mosaic.emplace(*layout.design, static_cast<int>(options.scale), options.body_shape, options.eye_frame, options.eye_ball);
+                            rendered.frames.push_back({mosaic->rasterize(), 100});
                         } else {
                             for (const auto& frame : reference.frames) rendered.frames.push_back({render_picture(layout.qr, frame.image, static_cast<int>(options.scale)), frame.duration_ms});
                         }
                         const bool animated = rendered.frames.size() > 1;
+                        if (!animated && !verify_frames(rendered, encoded_payload)) continue;
                         auto image = animated ? encode_gif(rendered) : encode_png(rendered.frames.front().image);
                         auto serialized = decode_image(image, {.input_limits = false});
                         if (!verify_frames(serialized, encoded_payload)) continue;
+                        const std::string svg = mosaic ? mosaic->svg() : std::string{};
                         const auto frame_count = static_cast<std::uint32_t>(serialized.frames.size());
                         const int preview_side = std::min(side, std::max(360, (25 + 4 * version) * 2));
                         for (auto& frame : serialized.frames) frame.image = resize_image(frame.image, preview_side, preview_side);
@@ -440,6 +452,7 @@ Batch generate(const openqr_request& request) {
         }
         if (!accepted) batch.skipped.push_back({static_cast<std::uint32_t>(version), attempts ?
             "No verified layout was found after " + std::to_string(attempts) + " attempts with the selected design." :
+            selected_correction ? "The content and recovery reserve do not fit this version at the selected error correction level." :
             "The content and recovery reserve do not fit this version at any error correction level."});
     }
     return batch;

@@ -26,7 +26,29 @@ set(openqr_runtime_name "$<TARGET_FILE_NAME:OpenQR::openqr>")
 if(UNIX)
     set(openqr_runtime_name "$<TARGET_SONAME_FILE_NAME:OpenQR::openqr>")
 endif()
-add_custom_command(TARGET openqr_nif POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/priv"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:openqr_nif> "${CMAKE_CURRENT_SOURCE_DIR}/priv/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:OpenQR::openqr> "${CMAKE_CURRENT_SOURCE_DIR}/priv/${openqr_runtime_name}")
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/c_src/openqr_nif.c" openqr_nif_source_identity)
+file(SHA256 "${CMAKE_CURRENT_LIST_FILE}" openqr_nif_config_identity)
+file(SHA256 "${ERL_NIF_INCLUDE_DIR}/erl_nif.h" openqr_nif_header_identity)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/c_src/openqr_nif.c" "${ERL_NIF_INCLUDE_DIR}/erl_nif.h")
+set(openqr_nif_identity
+    "source=${openqr_nif_source_identity}\ncmake=${openqr_nif_config_identity}\nerlang-nif=${openqr_nif_header_identity}\nc-compiler=${CMAKE_C_COMPILER_ID}-${CMAKE_C_COMPILER_VERSION}\nsystem=${CMAKE_SYSTEM_NAME}\nprocessor=${CMAKE_SYSTEM_PROCESSOR}\nconfiguration=$<CONFIG>\nc-flags=${CMAKE_C_FLAGS}\n")
+foreach(configuration IN LISTS CMAKE_CONFIGURATION_TYPES CMAKE_BUILD_TYPE)
+    string(TOUPPER "${configuration}" configuration_upper)
+    string(APPEND openqr_nif_identity "c-${configuration}=${CMAKE_C_FLAGS_${configuration_upper}}\n")
+endforeach()
+string(APPEND openqr_nif_identity
+    "compile-options=$<TARGET_PROPERTY:openqr_nif,COMPILE_OPTIONS>\ncompile-definitions=$<TARGET_PROPERTY:openqr_nif,COMPILE_DEFINITIONS>\nlink-options=$<TARGET_PROPERTY:openqr_nif,LINK_OPTIONS>\n")
+set(openqr_nif_build_id_file "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/openqr-nif-build-id.txt")
+file(GENERATE OUTPUT "${openqr_nif_build_id_file}" CONTENT "${openqr_nif_identity}")
+add_custom_target(openqr_elixir ALL
+    DEPENDS openqr_nif
+    COMMAND ${CMAKE_COMMAND}
+        "-DOPENQR_CORE_ID=${OpenQR_BUILD_ID_FILE}"
+        "-DOPENQR_NIF_ID=${openqr_nif_build_id_file}"
+        "-DOPENQR_NIF=$<TARGET_FILE:openqr_nif>"
+        "-DOPENQR_RUNTIME=$<TARGET_FILE:OpenQR::openqr>"
+        "-DOPENQR_RUNTIME_NAME=${openqr_runtime_name}"
+        "-DOPENQR_PRIV=${CMAKE_CURRENT_SOURCE_DIR}/priv"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PackageRuntime.cmake"
+    VERBATIM)

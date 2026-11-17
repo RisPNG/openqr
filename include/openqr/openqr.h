@@ -38,13 +38,25 @@ typedef enum openqr_flags {
     OPENQR_COLOR = 1u,
     OPENQR_VARY_URL = 2u,
     OPENQR_SEED_SET = 4u,
-    OPENQR_RANDOMIZE_SEED = 8u
+    OPENQR_RANDOMIZE_SEED = 8u,
+    OPENQR_ERROR_CORRECTION_L = 16u,
+    OPENQR_ERROR_CORRECTION_M = 32u,
+    OPENQR_ERROR_CORRECTION_Q = 64u,
+    OPENQR_ERROR_CORRECTION_H = 128u,
+    OPENQR_ERROR_CORRECTION_MASK = OPENQR_ERROR_CORRECTION_L | OPENQR_ERROR_CORRECTION_M |
+                                   OPENQR_ERROR_CORRECTION_Q | OPENQR_ERROR_CORRECTION_H
 } openqr_flags;
 
 typedef struct openqr_bytes {
     const uint8_t* data;
     size_t size;
 } openqr_bytes;
+
+typedef struct openqr_image_info {
+    uint32_t width;
+    uint32_t height;
+    uint32_t verified;
+} openqr_image_info;
 
 typedef struct openqr_options {
     uint32_t struct_size;
@@ -114,6 +126,7 @@ OPENQR_API openqr_bytes openqr_result_reference_preview(const openqr_result* res
 OPENQR_API openqr_bytes openqr_result_reference_input(const openqr_result* result);
 OPENQR_API const char* openqr_error_message(const openqr_error* error);
 OPENQR_API void openqr_error_destroy(openqr_error* error);
+OPENQR_API openqr_status openqr_inspect_image(openqr_bytes encoded, openqr_bytes expected_payload, openqr_image_info* info, openqr_buffer** pixels, openqr_error** error);
 OPENQR_API size_t openqr_style_count(openqr_style_category category);
 OPENQR_API const char* openqr_style_id(openqr_style_category category, size_t index);
 OPENQR_API const char* openqr_style_label(openqr_style_category category, size_t index);

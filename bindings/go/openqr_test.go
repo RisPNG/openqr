@@ -57,3 +57,30 @@ func TestSuppliedEmptyReferenceIsDistinct(t *testing.T) {
 		t.Fatalf("supplied empty image was accepted: %v", err)
 	}
 }
+
+func TestExplicitErrorCorrection(t *testing.T) {
+	options := DefaultOptions()
+	options.Version = 3
+	options.Scale = 3
+	seed := uint32(42)
+	options.Seed = &seed
+	if options.ErrorCorrection != 0 {
+		t.Fatal("the default must keep automatic error correction")
+	}
+	for _, correction := range []byte{'L', 'M', 'Q', 'H'} {
+		options.ErrorCorrection = correction
+		batch, err := Generate([]byte("QR"), nil, nil, &options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(batch.Results) != 1 || batch.Results[0].ErrorCorrection != correction {
+			t.Fatalf("requested correction %c was changed", correction)
+		}
+	}
+	options.ErrorCorrection = 'A'
+	_, err := Generate([]byte("QR"), nil, nil, &options)
+	var nativeError *Error
+	if !errors.As(err, &nativeError) || nativeError.Status != 1 {
+		t.Fatalf("invalid error correction was accepted: %v", err)
+	}
+}

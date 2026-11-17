@@ -21,6 +21,18 @@ public final class Smoke {
             var preview = new String(engine.stylePreview(category, styles.keySet().iterator().next()), java.nio.charset.StandardCharsets.UTF_8);
             if (!preview.contains("<svg ")) throw new AssertionError("Invalid native style preview.");
         }
+        for (char correction : new char[] {'L', 'M', 'Q', 'H'}) {
+            options.errorCorrection = correction;
+            var corrected = engine.generate(payload, null, options);
+            if (corrected.results().getFirst().errorCorrection() != correction)
+                throw new AssertionError("The requested error correction was changed.");
+        }
+        options.errorCorrection = 'A';
+        try {
+            engine.generate(payload, null, options);
+            throw new AssertionError("Invalid error correction was accepted.");
+        } catch (IllegalArgumentException error) { }
+        options.errorCorrection = null;
         options.scale = 4;
         try {
             engine.generate(payload, null, options);

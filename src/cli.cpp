@@ -64,6 +64,7 @@ int main(int argc, char** argv) {
                     "  --version 1..40           Single version (default all versions)\n"
                     "  --seed 0..4294967295      Deterministic search seed\n"
                     "  --randomize-seed          Exclude the supplied seed\n"
+                    "  --error-correction L|M|Q|H Choose a fixed level (default automatic)\n"
                     "  --scale 3..24             Pixels per module, multiple of 3\n"
                     "  --recovery-margin N       Reserved correction words per block\n"
                     "  --monochrome              Use black modules\n"
@@ -99,6 +100,13 @@ int main(int argc, char** argv) {
             else if (option == "--mode") {
                 if (value != "mosaic" && value != "picture") throw std::invalid_argument("Mode must be mosaic or picture.");
                 request.options.mode = value == "mosaic" ? OPENQR_MOSAIC : OPENQR_PICTURE;
+            } else if (option == "--error-correction") {
+                request.options.flags &= ~OPENQR_ERROR_CORRECTION_MASK;
+                if (value == "L") request.options.flags |= OPENQR_ERROR_CORRECTION_L;
+                else if (value == "M") request.options.flags |= OPENQR_ERROR_CORRECTION_M;
+                else if (value == "Q") request.options.flags |= OPENQR_ERROR_CORRECTION_Q;
+                else if (value == "H") request.options.flags |= OPENQR_ERROR_CORRECTION_H;
+                else throw std::invalid_argument("Error correction must be L, M, Q, or H.");
             } else if (option == "--brightness" || option == "--contrast") {
                 double number = 0;
                 const auto parsed = std::from_chars(value.data(), value.data() + value.size(), number);

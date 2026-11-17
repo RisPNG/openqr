@@ -88,7 +88,7 @@ defmodule Mix.Tasks.Compile.Openqr do
             "--config",
             "Release",
             "--target",
-            "openqr_nif",
+            "openqr_elixir",
             "--parallel",
             "1"
           ]
@@ -101,7 +101,33 @@ defmodule Mix.Tasks.Compile.Openqr do
       end
     end
 
-    Mix.Project.build_structure()
+    if match?({:win32, _}, :os.type()) do
+      Mix.Project.ensure_structure()
+      source_directory = Path.join(__DIR__, "priv")
+      destination_directory = Path.join(Mix.Project.app_path(), "priv")
+      identities = ~w(openqr-build-id.txt openqr-nif-build-id.txt)
+      runtime_files = File.ls!(source_directory) -- identities
+
+      refresh? =
+        Enum.any?(identities, fn name ->
+          File.read(Path.join(destination_directory, name)) !=
+            {:ok, File.read!(Path.join(source_directory, name))}
+        end) or
+          Enum.any?(runtime_files, fn name ->
+            not File.regular?(Path.join(destination_directory, name))
+          end)
+
+      if refresh? do
+        File.mkdir_p!(destination_directory)
+
+        for name <- runtime_files ++ identities do
+          File.cp!(Path.join(source_directory, name), Path.join(destination_directory, name))
+        end
+      end
+    else
+      Mix.Project.build_structure()
+    end
+
     {:ok, []}
   end
 end

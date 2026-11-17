@@ -36,20 +36,21 @@ const (
 )
 
 type Options struct {
-	Version        uint32
-	Scale          uint32
-	RecoveryMargin uint32
-	Seed           *uint32
-	Color          bool
-	VaryURL        bool
-	RandomizeSeed  bool
-	Mode           Mode
-	Contrast       float64
-	Brightness     float64
-	BackgroundRGBA uint32
-	BodyShape      string
-	EyeFrame       string
-	EyeBall        string
+	Version         uint32
+	Scale           uint32
+	RecoveryMargin  uint32
+	Seed            *uint32
+	ErrorCorrection byte
+	Color           bool
+	VaryURL         bool
+	RandomizeSeed   bool
+	Mode            Mode
+	Contrast        float64
+	Brightness      float64
+	BackgroundRGBA  uint32
+	BodyShape       string
+	EyeFrame        string
+	EyeBall         string
 }
 
 type Generated struct {
@@ -173,6 +174,19 @@ func Generate(payload, reference, background []byte, options *Options) (Generate
 		if options.Seed != nil {
 			request.options.seed = C.uint32_t(*options.Seed)
 			request.options.flags |= C.OPENQR_SEED_SET
+		}
+		switch options.ErrorCorrection {
+		case 0:
+		case 'L':
+			request.options.flags |= C.OPENQR_ERROR_CORRECTION_L
+		case 'M':
+			request.options.flags |= C.OPENQR_ERROR_CORRECTION_M
+		case 'Q':
+			request.options.flags |= C.OPENQR_ERROR_CORRECTION_Q
+		case 'H':
+			request.options.flags |= C.OPENQR_ERROR_CORRECTION_H
+		default:
+			return GeneratedBatch{}, &Error{Status: int(C.OPENQR_INVALID_ARGUMENT), Message: "Error correction must be L, M, Q, H, or zero for automatic selection."}
 		}
 		request.options.mode = C.openqr_mode(options.Mode)
 		request.options.contrast = C.double(options.Contrast)

@@ -117,12 +117,22 @@ pub enum StyleCategory {
     EyeBall = 2,
 }
 
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ErrorCorrection {
+    Low = 16,
+    Medium = 32,
+    Quartile = 64,
+    High = 128,
+}
+
 #[derive(Clone, Debug)]
 pub struct Options {
     pub version: u32,
     pub scale: u32,
     pub recovery_margin: u32,
     pub seed: Option<u32>,
+    pub error_correction: Option<ErrorCorrection>,
     pub color: bool,
     pub vary_url: bool,
     pub randomize_seed: bool,
@@ -151,6 +161,7 @@ impl Default for Options {
                 scale: raw.scale,
                 recovery_margin: raw.recovery_margin,
                 seed: (raw.flags & 4 != 0).then_some(raw.seed),
+                error_correction: None,
                 color: raw.flags & 1 != 0,
                 vary_url: raw.flags & 2 != 0,
                 randomize_seed: raw.flags & 8 != 0,
@@ -411,7 +422,10 @@ pub fn generate(
     request.options.flags = u32::from(options.color)
         | (u32::from(options.vary_url) << 1)
         | (u32::from(options.seed.is_some()) << 2)
-        | (u32::from(options.randomize_seed) << 3);
+        | (u32::from(options.randomize_seed) << 3)
+        | options
+            .error_correction
+            .map_or(0, |correction| correction as u32);
     request.options.mode = options.mode as c_int;
     request.options.contrast = options.contrast;
     request.options.brightness = options.brightness;

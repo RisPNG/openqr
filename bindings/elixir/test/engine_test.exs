@@ -41,10 +41,84 @@ defmodule OpenQR.EngineTest do
     assert reason =~ "Scale"
   end
 
+  test "inspects exact RGBA pixels and verifies literal payload bytes" do
+    payload = "  OpenQR\0\n"
+
+    assert {:ok, %{results: [entry]}} =
+             OpenQR.Engine.generate(payload, version: 3, scale: 3, seed: 42)
+
+    assert {:ok, %{pixels: pixels, width: 111, height: 111, verified: true}} =
+             OpenQR.Engine.inspect_image(entry.image, payload)
+
+    assert byte_size(pixels) == 111 * 111 * 4
+    assert <<255, 255, 255, 255, _::binary>> = pixels
+
+    assert {:ok, %{pixels: ^pixels, width: 111, height: 111, verified: false}} =
+             OpenQR.Engine.inspect_image(entry.image, "  OpenQR\0 ")
+  end
+
+  test "returns image inspection failures as errors" do
+    assert {:error, reason} = OpenQR.Engine.inspect_image("invalid image", "QR")
+    assert is_binary(reason) and reason != ""
+
+    assert_raise ArgumentError, fn -> OpenQR.Engine.inspect_image(nil, "QR") end
+  end
+
+  test "uses the selected error correction level without boosting" do
+    for correction <- ~w(L M Q H) do
+      assert {:ok, %{results: [entry]}} =
+               OpenQR.Engine.generate("ECC",
+                 version: 3,
+                 scale: 3,
+                 seed: 0,
+                 error_correction: correction
+               )
+
+      assert entry.error_correction == correction
+      assert entry.seed == 0
+      assert entry.verified_frames == entry.total_frames
+    end
+  end
+
+  test "does not change correction level when the chosen version cannot fit" do
+    assert {:error, reason} =
+             OpenQR.Engine.generate("abcdefghijklmnopq",
+               version: 1,
+               scale: 3,
+               seed: 42,
+               error_correction: "H"
+             )
+
+    assert reason =~ "selected error correction level"
+
+    assert_raise ArgumentError, fn ->
+      OpenQR.Engine.generate("ECC", error_correction: "invalid")
+    end
+  end
+
   test "exposes native styles and previews" do
     assert map_size(OpenQR.Engine.styles(:body)) == 22
+    assert OpenQR.Engine.styles(:eye_frame)["follow-body"] == "Follow body"
+    assert OpenQR.Engine.styles(:eye_ball)["follow-body"] == "Follow body"
     assert {:ok, svg} = OpenQR.Engine.style_preview(:eye_frame, "rounded")
     assert svg =~ "<svg"
     assert {:error, _} = OpenQR.Engine.style_preview(:body, "missing")
+  end
+
+  test "inherits the body shape for finder modules" do
+    assert {:ok, %{results: [entry]}} =
+             OpenQR.Engine.generate("https://openqr.my",
+               version: 3,
+               scale: 3,
+               seed: 42,
+               body_shape: "circle",
+               eye_frame: "follow-body",
+               eye_ball: "follow-body"
+             )
+
+    assert entry.verified_frames == entry.total_frames
+    assert entry.svg =~ "<ellipse"
+    assert {:ok, _} = OpenQR.Engine.style_preview(:eye_frame, "follow-body")
+    assert {:ok, _} = OpenQR.Engine.style_preview(:eye_ball, "follow-body")
   end
 end

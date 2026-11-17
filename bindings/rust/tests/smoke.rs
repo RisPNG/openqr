@@ -1,4 +1,6 @@
-use openqr::{ImageFormat, Options, StyleCategory, generate, style_preview, styles};
+use openqr::{
+    ErrorCorrection, ImageFormat, Options, StyleCategory, generate, style_preview, styles,
+};
 
 #[test]
 fn generate_literal_bytes_and_borrow_every_result_buffer() {
@@ -48,4 +50,26 @@ fn native_errors_are_owned_and_supplied_empty_reference_is_distinct() {
     let error = generate(b"QR", Some(b""), None, &options).err().unwrap();
     assert_eq!(error.status, 1);
     assert!(error.message.contains("empty"));
+}
+
+#[test]
+fn requested_error_correction_is_preserved() {
+    assert_eq!(Options::default().error_correction, None);
+    for (correction, expected) in [
+        (ErrorCorrection::Low, 'L'),
+        (ErrorCorrection::Medium, 'M'),
+        (ErrorCorrection::Quartile, 'Q'),
+        (ErrorCorrection::High, 'H'),
+    ] {
+        let options = Options {
+            version: 3,
+            scale: 3,
+            seed: Some(42),
+            error_correction: Some(correction),
+            ..Options::default()
+        };
+        let batch = generate(b"QR", None, None, &options).unwrap();
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch.get(0).unwrap().error_correction, expected);
+    }
 }

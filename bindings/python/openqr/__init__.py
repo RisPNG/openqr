@@ -167,7 +167,7 @@ class Engine:
             self._lib.openqr_buffer_destroy(buffer)
             self._lib.openqr_error_destroy(error)
 
-    def generate(self, payload: str | bytes, reference: bytes | None = None, *, mode: str = "mosaic", version: int | None = None, seed: int | None = None, recovery_margin: int = 2, scale: int = 12, color: bool = True, contrast: float = 1, brightness: float = 1, vary_url: bool = False, background_color: str | int = "transparent", background_image: bytes | None = None, randomize_seed: bool = False, body_shape: str = "rounded", eye_frame: str = "rounded-dots", eye_ball: str = "dots") -> GeneratedBatch:
+    def generate(self, payload: str | bytes, reference: bytes | None = None, *, mode: str = "mosaic", version: int | None = None, seed: int | None = None, recovery_margin: int = 2, scale: int = 12, color: bool = True, contrast: float = 1, brightness: float = 1, vary_url: bool = False, background_color: str | int = "transparent", background_image: bytes | None = None, randomize_seed: bool = False, body_shape: str = "rounded", eye_frame: str = "rounded-dots", eye_ball: str = "dots", error_correction: str | None = None) -> GeneratedBatch:
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
         elif not isinstance(payload, bytes):
@@ -179,6 +179,8 @@ class Engine:
             raise ValueError("version must be between 1 and 40, or None for all versions")
         if mode not in ("mosaic", "picture"):
             raise ValueError("mode must be mosaic or picture")
+        if error_correction not in (None, "L", "M", "Q", "H"):
+            raise ValueError("error_correction must be L, M, Q, H, or None for automatic selection")
         if any("\0" in style for style in (body_shape, eye_frame, eye_ball)):
             raise ValueError("Style identifiers cannot contain NUL")
         if isinstance(background_color, str):
@@ -208,6 +210,7 @@ class Engine:
         request.options.version = version or 0
         request.options.seed = seed or 0
         request.options.flags = int(bool(color)) | (2 if vary_url else 0) | (4 if seed is not None else 0) | (8 if randomize_seed else 0)
+        request.options.flags |= {None: 0, "L": 16, "M": 32, "Q": 64, "H": 128}[error_correction]
         request.options.mode = 0 if mode == "mosaic" else 1
         request.options.recovery_margin = recovery_margin
         request.options.scale = scale

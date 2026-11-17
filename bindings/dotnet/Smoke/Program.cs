@@ -20,4 +20,16 @@ try
     throw new InvalidOperationException("The native option error was lost.");
 }
 catch (OpenQRException error) when (error.Status == 1) { }
+foreach (var correction in new[] { 'L', 'M', 'Q', 'H' })
+{
+    var corrected = Engine.Generate(payload, options: new Options { Version = 3, Scale = 3, Seed = 42, ErrorCorrection = correction });
+    if (corrected.Results.Single().ErrorCorrection != correction)
+        throw new InvalidOperationException("The requested error correction was changed.");
+}
+try
+{
+    Engine.Generate(payload, options: new Options { Version = 3, Scale = 3, ErrorCorrection = 'A' });
+    throw new InvalidOperationException("Invalid error correction was accepted.");
+}
+catch (ArgumentOutOfRangeException) { }
 Console.WriteLine($"OpenQR {Engine.Version}: .NET ABI smoke passed");

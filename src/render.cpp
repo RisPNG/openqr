@@ -30,6 +30,7 @@ constexpr Style bodies[] = {
     {"vertical-bars", "Joined vertical"}
 };
 constexpr Style frames[] = {
+    {"follow-body", "Follow body"},
     {"rounded-dots", "Rounded modules"}, {"square", "Square"}, {"rounded", "Rounded"},
     {"circle", "Circle"}, {"rounded-top-left", "Rounded top left"},
     {"rounded-top-right", "Rounded top right"}, {"rounded-bottom-left", "Rounded bottom left"},
@@ -39,6 +40,7 @@ constexpr Style frames[] = {
     {"scalloped", "Scalloped"}
 };
 constexpr Style balls[] = {
+    {"follow-body", "Follow body"},
     {"square", "Square"}, {"rounded", "Rounded"}, {"circle", "Circle"},
     {"dots", "Rounded dots"}, {"small-dots", "Linked dots"}, {"leaf", "Leaf"},
     {"leaf-reverse", "Reverse leaf"}, {"rounded-top-left", "Rounded top left"},
@@ -67,11 +69,12 @@ struct Primitive {
     int side;
     std::array<std::uint8_t, 3> color;
     int corners;
+    std::size_t geometry = 0;
 };
 
-struct Mask {
+struct Shape {
+    int side;
     std::vector<Part> parts;
-    std::vector<std::uint8_t> coverage;
 };
 
 std::vector<Part> shape_geometry(std::string_view shape, int side, int corners, int size) {
@@ -182,7 +185,7 @@ std::vector<Part> shape_geometry(std::string_view shape, int side, int corners, 
     return parts;
 }
 
-Mask rasterize_shape(std::vector<Part> parts, int side, int scale) {
+std::vector<std::uint8_t> rasterize_shape(const std::vector<Part>& parts, int side, int scale) {
     const int resolution = scale * 4;
     const int dimension = side * resolution;
     BLImage image;
@@ -231,7 +234,7 @@ Mask rasterize_shape(std::vector<Part> parts, int side, int scale) {
     BLImageData data;
     if (image.get_data(&data) != BL_SUCCESS) throw std::runtime_error("Unable to read QR raster mask.");
     const int output_side = side * scale;
-    Mask result{std::move(parts), std::vector<std::uint8_t>(std::size_t(output_side) * output_side)};
+    std::vector<std::uint8_t> result(std::size_t(output_side) * output_side);
     for (int y = 0; y < output_side; ++y) {
         for (int x = 0; x < output_side; ++x) {
             unsigned sum = 0;
@@ -239,7 +242,7 @@ Mask rasterize_shape(std::vector<Part> parts, int side, int scale) {
                 const auto* row = reinterpret_cast<const std::uint32_t*>(static_cast<const std::uint8_t*>(data.pixel_data) + (y * 4 + dy) * data.stride);
                 for (int dx = 0; dx < 4; ++dx) sum += row[x * 4 + dx] >> 24;
             }
-            result.coverage[std::size_t(y) * output_side + x] = static_cast<std::uint8_t>((sum + 8) / 16);
+            result[std::size_t(y) * output_side + x] = static_cast<std::uint8_t>((sum + 8) / 16);
         }
     }
     return result;
@@ -247,24 +250,34 @@ Mask rasterize_shape(std::vector<Part> parts, int side, int scale) {
 
 }
 
+struct MosaicScene::Geometry {
+    int size = 0;
+    int scale = 0;
+    std::vector<Primitive> primitives;
+    std::vector<Shape> shapes;
+};
+
 std::span<const Style> body_styles() { return bodies; }
 std::span<const Style> eye_frame_styles() { return frames; }
 std::span<const Style> eye_ball_styles() { return balls; }
 
-Rendered render_mosaic(const MosaicDesign& design, int scale, std::string_view body_shape, std::string_view eye_frame, std::string_view eye_ball) {
+MosaicScene::MosaicScene(const MosaicDesign& design, int scale, std::string_view body_shape, std::string_view eye_frame, std::string_view eye_ball)
+    : geometry_(std::make_unique<Geometry>()) {
     if (std::none_of(std::begin(bodies), std::end(bodies), [body_shape](const auto& style) { return style.id == body_shape; })) throw std::invalid_argument("Choose a valid QR body shape.");
     if (std::none_of(std::begin(frames), std::end(frames), [eye_frame](const auto& style) { return style.id == eye_frame; })) throw std::invalid_argument("Choose a valid eye frame shape.");
     if (std::none_of(std::begin(balls), std::end(balls), [eye_ball](const auto& style) { return style.id == eye_ball; })) throw std::invalid_argument("Choose a valid eye ball shape.");
     if (scale < 3 || scale > 24 || scale % 3) throw std::invalid_argument("QR scale must be a multiple of 3 between 3 and 24.");
     const int size = design.size;
-    const int image_size = (size + 8) * scale;
-    Rendered result{{image_size, image_size, std::vector<std::uint8_t>(std::size_t(image_size) * image_size * 4, 255)}, {}};
-    std::ostringstream svg;
-    svg.imbue(std::locale::classic());
-    svg << std::setprecision(12) << "<?xml version=\"1.0\" encoding=\"utf-8\"?><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << image_size << "\" height=\"" << image_size << "\" viewBox=\"0 0 " << size + 8 << ' ' << size + 8 << "\"><rect width=\"100%\" height=\"100%\" fill=\"white\"/>";
+    geometry_->size = size;
+    geometry_->scale = scale;
+    const std::array module_shapes{
+        body_shape,
+        eye_frame == "follow-body" ? body_shape : eye_frame == "rounded-dots" ? std::string_view{"rounded"} : std::string_view{},
+        eye_ball == "follow-body" ? body_shape : eye_ball == "dots" ? std::string_view{"rounded"} : std::string_view{}
+    };
     std::vector<std::uint8_t> finder_roles(std::size_t(size) * size);
     std::vector<std::pair<int, int>> finders;
-    std::vector<Primitive> primitives;
+    auto& primitives = geometry_->primitives;
     for (const auto [row, column] : {std::pair{0, 0}, std::pair{0, size - 7}, std::pair{size - 7, 0}, std::pair{size - 7, size - 7}}) {
         bool is_finder = true;
         for (int y = 0; y < 7 && is_finder; ++y) {
@@ -279,7 +292,7 @@ Rendered render_mosaic(const MosaicDesign& design, int scale, std::string_view b
         for (int y = 0; y < 7; ++y)
             for (int x = 0; x < 7; ++x)
                 finder_roles[std::size_t(row + y) * size + column + x] = x >= 2 && x <= 4 && y >= 2 && y <= 4 ? 2 : 1;
-        if (eye_frame != "rounded-dots") {
+        if (module_shapes[1].empty()) {
             const auto center = (std::size_t(row + 3) * size + column + 3) * 3;
             const std::array<std::uint8_t, 3> color{design.colors[center], design.colors[center + 1], design.colors[center + 2]};
             if (eye_frame == "dots" || eye_frame == "dashed")
@@ -295,9 +308,9 @@ Rendered render_mosaic(const MosaicDesign& design, int scale, std::string_view b
             const auto index = std::size_t(row) * size + column;
             if (!design.matrix[index]) continue;
             const auto role = finder_roles[index];
-            if ((role == 1 && eye_frame != "rounded-dots") || (role == 2 && eye_ball != "dots")) continue;
+            const auto shape = module_shapes[role];
+            if (shape.empty()) continue;
             const std::array<std::uint8_t, 3> color{design.colors[index * 3], design.colors[index * 3 + 1], design.colors[index * 3 + 2]};
-            const auto shape = ((role == 1 && eye_frame == "rounded-dots") || (role == 2 && eye_ball == "dots")) ? std::string_view{"rounded"} : body_shape;
             int corners = 15;
             if (shape == "connected-rounded" || shape == "horizontal-bars" || shape == "vertical-bars") {
                 const bool above = row > 0 && design.matrix[index - size];
@@ -311,31 +324,60 @@ Rendered render_mosaic(const MosaicDesign& design, int scale, std::string_view b
             primitives.push_back({shape, column + 4, row + 4, 1, color, corners});
         }
     }
-    if (eye_ball != "dots") {
+    if (module_shapes[2].empty()) {
         for (const auto [row, column] : finders) {
             const auto center = (std::size_t(row + 3) * size + column + 3) * 3;
             primitives.push_back({eye_ball, column + 6, row + 6, 3, {design.colors[center], design.colors[center + 1], design.colors[center + 2]}, 15});
         }
     }
-    std::map<std::tuple<std::string_view, int, int>, Mask> masks;
-    for (const auto& primitive : primitives) {
+    std::map<std::tuple<std::string_view, int, int>, std::size_t> shapes;
+    for (auto& primitive : primitives) {
         const auto key = std::tuple{primitive.shape, primitive.side, primitive.corners};
-        auto found = masks.find(key);
-        if (found == masks.end()) found = masks.emplace(key, rasterize_shape(shape_geometry(primitive.shape, primitive.side, primitive.corners, size), primitive.side, scale)).first;
-        const auto& mask = found->second;
+        auto found = shapes.find(key);
+        if (found == shapes.end()) {
+            const auto index = geometry_->shapes.size();
+            geometry_->shapes.push_back({primitive.side, shape_geometry(primitive.shape, primitive.side, primitive.corners, size)});
+            found = shapes.emplace(key, index).first;
+        }
+        primitive.geometry = found->second;
+    }
+}
+
+MosaicScene::~MosaicScene() = default;
+
+Image MosaicScene::rasterize() const {
+    const int scale = geometry_->scale;
+    const int image_size = (geometry_->size + 8) * scale;
+    Image result{image_size, image_size, std::vector<std::uint8_t>(std::size_t(image_size) * image_size * 4, 255)};
+    std::vector<std::vector<std::uint8_t>> masks;
+    masks.reserve(geometry_->shapes.size());
+    for (const auto& shape : geometry_->shapes) masks.push_back(rasterize_shape(shape.parts, shape.side, scale));
+    for (const auto& primitive : geometry_->primitives) {
+        const auto& mask = masks[primitive.geometry];
         const int side = primitive.side * scale;
         for (int y = 0; y < side; ++y) {
             for (int x = 0; x < side; ++x) {
-                const unsigned alpha = mask.coverage[std::size_t(y) * side + x];
+                const unsigned alpha = mask[std::size_t(y) * side + x];
                 const auto target = (std::size_t(primitive.row * scale + y) * image_size + primitive.column * scale + x) * 4;
                 for (int channel = 0; channel < 3; ++channel)
-                    result.image.pixels[target + channel] = static_cast<std::uint8_t>((result.image.pixels[target + channel] * (255 - alpha) + primitive.color[channel] * alpha + 127) / 255);
+                    result.pixels[target + channel] = static_cast<std::uint8_t>((result.pixels[target + channel] * (255 - alpha) + primitive.color[channel] * alpha + 127) / 255);
             }
         }
+    }
+    return result;
+}
+
+std::string MosaicScene::svg() const {
+    const int size = geometry_->size;
+    const int image_size = (size + 8) * geometry_->scale;
+    std::ostringstream svg;
+    svg.imbue(std::locale::classic());
+    svg << std::setprecision(12) << "<?xml version=\"1.0\" encoding=\"utf-8\"?><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << image_size << "\" height=\"" << image_size << "\" viewBox=\"0 0 " << size + 8 << ' ' << size + 8 << "\"><rect width=\"100%\" height=\"100%\" fill=\"white\"/>";
+    for (const auto& primitive : geometry_->primitives) {
         std::ostringstream color;
         color << '#' << std::hex << std::setfill('0');
         for (const auto channel : primitive.color) color << std::setw(2) << int(channel);
-        for (const auto& part : mask.parts) {
+        for (const auto& part : geometry_->shapes[primitive.geometry].parts) {
             const double x = primitive.column + part.x, y = primitive.row + part.y;
             if (part.kind == Part::Kind::polygon) {
                 svg << "<polygon points=\"";
@@ -359,8 +401,7 @@ Rendered render_mosaic(const MosaicDesign& design, int scale, std::string_view b
         }
     }
     svg << "</svg>";
-    result.svg = svg.str();
-    return result;
+    return svg.str();
 }
 
 Image render_picture(const QrCode& qr, const Image& reference, int scale) {
@@ -424,7 +465,7 @@ std::string render_style_preview(std::string_view category, std::string_view key
         else { ball = key; view_box = "5.7 5.7 3.6 3.6"; }
     } else throw std::invalid_argument("Choose a valid QR style preview.");
     design.colors.assign(std::size_t(design.size) * design.size * 3, 0);
-    auto result = render_mosaic(design, 12, body, frame, ball).svg;
+    auto result = MosaicScene(design, 12, body, frame, ball).svg();
     const auto width = result.find(" width=\"");
     const auto viewport = result.find("><rect", width);
     result.replace(width, viewport - width, " width=\"88\" height=\"88\" viewBox=\"" + std::string(view_box) + '"');

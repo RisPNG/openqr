@@ -99,6 +99,17 @@ static ERL_NIF_TERM generate_native(ErlNifEnv* env, int argc, const ERL_NIF_TERM
             else return enif_make_badarg(env);
         }
     }
+    if (enif_get_map_value(env, argv[1], enif_make_atom(env, "error_correction"), &value)) {
+        ErlNifBinary correction;
+        if (!enif_inspect_binary(env, value, &correction) || correction.size != 1) return enif_make_badarg(env);
+        switch (correction.data[0]) {
+            case 'L': request.options.flags |= OPENQR_ERROR_CORRECTION_L; break;
+            case 'M': request.options.flags |= OPENQR_ERROR_CORRECTION_M; break;
+            case 'Q': request.options.flags |= OPENQR_ERROR_CORRECTION_Q; break;
+            case 'H': request.options.flags |= OPENQR_ERROR_CORRECTION_H; break;
+            default: return enif_make_badarg(env);
+        }
+    }
     if (enif_get_map_value(env, argv[1], enif_make_atom(env, "mode"), &value)) {
         if (enif_is_identical(value, enif_make_atom(env, "picture"))) request.options.mode = OPENQR_PICTURE;
         else if (enif_is_identical(value, enif_make_atom(env, "mosaic"))) request.options.mode = OPENQR_MOSAIC;
@@ -200,6 +211,30 @@ static ERL_NIF_TERM generate_native(ErlNifEnv* env, int argc, const ERL_NIF_TERM
     return enif_make_tuple2(env, enif_make_atom(env, "ok"), batch);
 }
 
+static ERL_NIF_TERM inspect_image(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    ErlNifBinary encoded, expected_payload;
+    if (argc != 2 || !enif_inspect_binary(env, argv[0], &encoded) || !enif_inspect_binary(env, argv[1], &expected_payload)) return enif_make_badarg(env);
+    openqr_image_info info;
+    openqr_buffer* pixels = NULL;
+    openqr_error* error = NULL;
+    if (openqr_inspect_image((openqr_bytes){encoded.data, encoded.size}, (openqr_bytes){expected_payload.data, expected_payload.size}, &info, &pixels, &error) != OPENQR_OK) {
+        const char* message = error ? openqr_error_message(error) : "OpenQR image inspection failed.";
+        ERL_NIF_TERM reason;
+        memcpy(enif_make_new_binary(env, strlen(message), &reason), message, strlen(message));
+        openqr_error_destroy(error);
+        return enif_make_tuple2(env, enif_make_atom(env, "error"), reason);
+    }
+    const openqr_bytes source = openqr_buffer_bytes(pixels);
+    ERL_NIF_TERM binary, image = enif_make_new_map(env);
+    memcpy(enif_make_new_binary(env, source.size, &binary), source.data, source.size);
+    enif_make_map_put(env, image, enif_make_atom(env, "pixels"), binary, &image);
+    enif_make_map_put(env, image, enif_make_atom(env, "width"), enif_make_uint(env, info.width), &image);
+    enif_make_map_put(env, image, enif_make_atom(env, "height"), enif_make_uint(env, info.height), &image);
+    enif_make_map_put(env, image, enif_make_atom(env, "verified"), enif_make_atom(env, info.verified ? "true" : "false"), &image);
+    openqr_buffer_destroy(pixels);
+    return enif_make_tuple2(env, enif_make_atom(env, "ok"), image);
+}
+
 static ERL_NIF_TERM styles(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     openqr_style_category category;
     if (argc != 1) return enif_make_badarg(env);
@@ -250,6 +285,7 @@ static ERL_NIF_TERM style_preview(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
 static ErlNifFunc functions[] = {
     {"generate_native", 2, generate_native, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"inspect_image", 2, inspect_image, ERL_NIF_DIRTY_JOB_CPU_BOUND},
     {"styles", 1, styles, 0},
     {"style_preview", 2, style_preview, ERL_NIF_DIRTY_JOB_CPU_BOUND}
 };

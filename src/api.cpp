@@ -109,6 +109,24 @@ openqr_bytes openqr_result_reference_input(const openqr_result* result) {
 const char* openqr_error_message(const openqr_error* error) { return error ? error->message.c_str() : nullptr; }
 void openqr_error_destroy(openqr_error* error) { delete error; }
 
+openqr_status openqr_inspect_image(openqr_bytes encoded, openqr_bytes expected_payload, openqr_image_info* info, openqr_buffer** pixels, openqr_error** error) {
+    if (info) *info = {};
+    if (pixels) *pixels = nullptr;
+    if (error) *error = nullptr;
+    try {
+        if (!info || !pixels || (!encoded.data && encoded.size) || (!expected_payload.data && expected_payload.size))
+            throw std::invalid_argument("Image inspection requires valid input spans and output pointers.");
+        const auto animation = openqr::decode_image({encoded.data, encoded.size}, {.still_only = true});
+        const auto& image = animation.frames.front().image;
+        const bool verified = openqr::verify_frames(animation, {expected_payload.data, expected_payload.size});
+        *pixels = new openqr_buffer{std::string(reinterpret_cast<const char*>(image.pixels.data()), image.pixels.size())};
+        *info = {static_cast<uint32_t>(image.width), static_cast<uint32_t>(image.height), verified};
+        return OPENQR_OK;
+    } catch (...) {
+        return translate_native_failure(error);
+    }
+}
+
 size_t openqr_style_count(openqr_style_category category) {
     switch (category) {
     case OPENQR_BODY: return openqr::body_styles().size();

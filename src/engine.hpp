@@ -3,10 +3,13 @@
 #include <openqr/openqr.h>
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
 namespace openqr {
+
+struct Animation;
 
 struct Generated {
     std::uint32_t version = 0;
@@ -34,5 +37,6 @@ struct Batch {
 };
 
 Batch generate(const openqr_request& request);
+bool verify_frames(const Animation& animation, std::span<const std::uint8_t> payload);
 
 }

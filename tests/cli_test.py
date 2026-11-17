@@ -75,3 +75,34 @@ def test_cli_explicit_empty_reference_fails_without_artifacts(cli, tmp_path):
     assert process.stderr.strip()
     assert process.stdout == ""
     assert not output.exists()
+
+
+@pytest.mark.parametrize("correction", ["L", "M", "Q", "H"])
+def test_cli_uses_the_requested_error_correction(cli, tmp_path, correction):
+    output = tmp_path / "results"
+    process = subprocess.run([str(cli), "--payload", "ECC", "--output", str(output), "--version", "3", "--scale", "3", "--seed", "42", "--error-correction", correction], capture_output=True, encoding="utf-8", check=False)
+    assert process.returncode == 0, process.stderr
+    entry, = json.loads(process.stdout)["results"]
+    assert entry["error_correction"] == correction
+    with Image.open(output / entry["file"]) as image:
+        codes = zxingcpp.read_barcodes(image.convert("RGB"), formats=zxingcpp.BarcodeFormat.QRCode)
+        assert any(code.bytes == b"ECC" for code in codes)
+
+
+@pytest.mark.parametrize("correction", ["auto", "invalid"])
+def test_cli_rejects_unknown_error_correction(cli, tmp_path, correction):
+    output = tmp_path / "must-not-exist"
+    process = subprocess.run([str(cli), "--payload", "ECC", "--output", str(output), "--error-correction", correction], capture_output=True, encoding="utf-8", check=False)
+    assert process.returncode == 1
+    assert "Error correction must be" in process.stderr
+    assert process.stdout == ""
+    assert not output.exists()
+
+
+def test_cli_keeps_the_selected_level_when_it_cannot_fit(cli, tmp_path):
+    output = tmp_path / "must-not-exist"
+    process = subprocess.run([str(cli), "--payload", "abcdefghijklmnopq", "--output", str(output), "--version", "1", "--error-correction", "H"], capture_output=True, encoding="utf-8", check=False)
+    assert process.returncode == 3
+    assert "selected error correction level" in process.stderr
+    assert process.stdout == ""
+    assert not output.exists()

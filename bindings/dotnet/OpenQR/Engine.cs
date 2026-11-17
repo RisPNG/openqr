@@ -9,6 +9,7 @@ public sealed record Options
     public uint Scale { get; init; } = 12;
     public uint RecoveryMargin { get; init; } = 2;
     public uint? Seed { get; init; }
+    public char? ErrorCorrection { get; init; }
     public bool Color { get; init; } = true;
     public bool VaryUrl { get; init; }
     public bool RandomizeSeed { get; init; }
@@ -79,6 +80,15 @@ public static class Engine
         request.Options.RecoveryMargin = options.RecoveryMargin;
         request.Options.Seed = options.Seed ?? 0;
         request.Options.Flags = (options.Color ? 1u : 0u) | (options.VaryUrl ? 2u : 0u) | (options.Seed.HasValue ? 4u : 0u) | (options.RandomizeSeed ? 8u : 0u);
+        request.Options.Flags |= options.ErrorCorrection switch
+        {
+            null => 0u,
+            'L' => 16u,
+            'M' => 32u,
+            'Q' => 64u,
+            'H' => 128u,
+            _ => throw new ArgumentOutOfRangeException(nameof(options.ErrorCorrection), "Error correction must be L, M, Q, H, or null for automatic selection.")
+        };
         request.Options.Mode = options.Picture ? 1 : 0;
         request.Options.Contrast = options.Contrast;
         request.Options.Brightness = options.Brightness;
