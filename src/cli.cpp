@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <locale>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -109,8 +110,10 @@ int main(int argc, char** argv) {
                 else throw std::invalid_argument("Error correction must be L, M, Q, or H.");
             } else if (option == "--brightness" || option == "--contrast") {
                 double number = 0;
-                const auto parsed = std::from_chars(value.data(), value.data() + value.size(), number);
-                if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()) throw std::invalid_argument("Invalid number: " + value);
+                std::istringstream input(value);
+                input.imbue(std::locale::classic());
+                input >> std::noskipws >> number;
+                if (!input || !input.eof() || value.starts_with('+') || value.find_first_not_of("0123456789.eE+-") != std::string::npos) throw std::invalid_argument("Invalid number: " + value);
                 if (option == "--brightness") request.options.brightness = number;
                 else request.options.contrast = number;
             } else {

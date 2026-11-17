@@ -106,3 +106,26 @@ def test_cli_keeps_the_selected_level_when_it_cannot_fit(cli, tmp_path):
     assert "selected error correction level" in process.stderr
     assert process.stdout == ""
     assert not output.exists()
+
+
+@pytest.mark.parametrize("option", ["--brightness", "--contrast"])
+@pytest.mark.parametrize("value", ["0.1", ".5", "1.", "1e+0", "3"])
+def test_cli_accepts_decimal_and_scientific_reference_adjustments(cli, tmp_path, option, value):
+    output = tmp_path / "results"
+    process = subprocess.run([str(cli), "--payload", "QR", "--output", str(output), "--version", "3", "--scale", "3", "--seed", "42", option, value], capture_output=True, encoding="utf-8", check=False)
+    assert process.returncode == 0, process.stderr
+    entry, = json.loads(process.stdout)["results"]
+    with Image.open(output / entry["file"]) as image:
+        codes = zxingcpp.read_barcodes(image.convert("RGB"), formats=zxingcpp.BarcodeFormat.QRCode)
+        assert any(code.bytes == b"QR" for code in codes)
+
+
+@pytest.mark.parametrize("option", ["--brightness", "--contrast"])
+@pytest.mark.parametrize("value", ["", " 1", "1 ", "1,5", "1extra", "+1", "0x1p0", "1e+", "nan", "inf", "1e500", "1e-500", "0.09", "3.01"])
+def test_cli_rejects_invalid_reference_adjustments_without_artifacts(cli, tmp_path, option, value):
+    output = tmp_path / "must-not-exist"
+    process = subprocess.run([str(cli), "--payload", "QR", "--output", str(output), option, value], capture_output=True, encoding="utf-8", check=False)
+    assert process.returncode == 1
+    assert process.stderr.strip()
+    assert process.stdout == ""
+    assert not output.exists()
