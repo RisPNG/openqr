@@ -96,6 +96,7 @@ install(FILES "${SOURCE_DIR}/LICENSE.md" "${SOURCE_DIR}/README.ijg"
 file(MAKE_DIRECTORY "${openqr_jpeg_prefix}/include")
 add_library(openqr_jpeg STATIC IMPORTED GLOBAL)
 set_target_properties(openqr_jpeg PROPERTIES
+  SYSTEM FALSE
   IMPORTED_LOCATION "${openqr_jpeg_library}"
   INTERFACE_INCLUDE_DIRECTORIES "${openqr_jpeg_prefix}/include")
 add_dependencies(openqr_jpeg openqr_jpeg_build)
