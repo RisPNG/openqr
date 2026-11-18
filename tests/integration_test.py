@@ -133,7 +133,7 @@ def test_follow_body_eyes_keep_existing_rounded_module_geometry(engine):
 @pytest.mark.parametrize("eye_frame, eye_ball", [("follow-body", "follow-body"), ("square", "small-dots")])
 def test_mosaic_finder_frames_and_balls_follow_local_artwork_colors(engine, eye_frame, eye_ball):
     source = Image.new("RGB", (256, 256))
-    corner_colors = ((224, 52, 96), (81, 181, 48), (37, 102, 218), (216, 169, 38))
+    corner_colors = ((244, 146, 152), (127, 210, 77), (101, 168, 239), (231, 184, 82))
     for corner, color in enumerate(corner_colors):
         row, column = divmod(corner, 2)
         source.paste(color, (column * 128, row * 128, (column + 1) * 128, (row + 1) * 128))
@@ -159,10 +159,16 @@ def test_mosaic_finder_frames_and_balls_follow_local_artwork_colors(engine, eye_
         if not np.array_equal(np.any(sample < 255, axis=2), finder):
             continue
         finder_count += 1
-        for ink in (sample[0, 3], sample[3, 3]):
-            assert np.ptp(ink) >= 10
-            np.testing.assert_array_equal(np.argsort(ink), np.argsort(color))
-            assert "#" + bytes(ink).hex() in svg_fills
+        body_rows = slice(-16, -8) if row else slice(8, 16)
+        body_columns = slice(-16, -8) if column else slice(8, 16)
+        nearby = modules[body_rows, body_columns]
+        body_ink = nearby[np.any(nearby < 255, axis=2)]
+        assert len(body_ink) > 0
+        ink = body_ink[0]
+        assert np.all(sample[finder] == ink)
+        assert np.ptp(ink) >= 10
+        np.testing.assert_array_equal(np.argsort(ink), np.argsort(color))
+        assert "#" + bytes(ink).hex() in svg_fills
     assert finder_count == 3
 
 
@@ -186,6 +192,40 @@ def test_existing_logo_fixtures_and_reed_solomon_reserve(engine, filename):
     assert entry.changed_codewords == sum(entry.block_errors)
     assert all(0 <= errors <= capacity - 2 for errors, capacity in zip(entry.block_errors, entry.block_capacities))
     decode_frames(entry.image, entry.payload)
+
+
+def test_lego_mosaic_alignment_pattern_follows_local_artwork_color(engine):
+    source = (Path(__file__).parent / "fixtures" / "lego.ico").read_bytes()
+    payload = b"lego.com"
+    scale = 12
+    entry = engine.generate(payload, source, version=6, scale=scale, seed=42,
+                            body_shape="circle", eye_frame="follow-body", eye_ball="small-dots").results[0]
+    decode_frames(entry.image, payload)
+    assert all(errors <= capacity - 2 for errors, capacity in zip(entry.block_errors, entry.block_capacities))
+
+    with Image.open(io.BytesIO(entry.image)) as image:
+        pixels = np.asarray(image.convert("RGB"))
+    border = 4 * scale
+    assert np.all(pixels[:border] == 255)
+    assert np.all(pixels[-border:] == 255)
+    assert np.all(pixels[:, :border] == 255)
+    assert np.all(pixels[:, -border:] == 255)
+    center_offset = border + scale // 2
+    modules = pixels[center_offset:-border:scale, center_offset:-border:scale]
+
+    alignment = np.ones((5, 5), dtype=bool)
+    alignment[1:-1, 1:-1] = False
+    alignment[2, 2] = True
+    centers = (6, len(modules) - 7)
+    patterns = []
+    for y in centers:
+        for x in centers:
+            sample = modules[y - 2:y + 3, x - 2:x + 3]
+            if np.array_equal(np.any(sample < 255, axis=2), alignment):
+                patterns.append(sample[alignment])
+    assert len(patterns) == 1
+    red, green, blue = patterns[0].T
+    assert np.all((red > green) & (red > blue))
 
 
 def test_mosaic_distinguishes_pale_reference_colors_without_losing_the_payload(engine):

@@ -77,17 +77,6 @@ struct Shape {
     std::vector<Part> parts;
 };
 
-std::array<std::uint8_t, 3> finder_ink(const MosaicDesign& design, std::size_t index) {
-    std::array<std::uint8_t, 3> color{design.colors[index * 3], design.colors[index * 3 + 1], design.colors[index * 3 + 2]};
-    constexpr double maximum_luma = 96;
-    const double luma = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2];
-    if (luma > maximum_luma) {
-        const double factor = maximum_luma / luma;
-        for (auto& channel : color) channel = static_cast<std::uint8_t>(std::nearbyint(channel * factor));
-    }
-    return color;
-}
-
 std::vector<Part> shape_geometry(std::string_view shape, int side, int corners, int size) {
     std::vector<Part> parts;
     if (((shape == "circle" || shape == "small-dots" || shape == "random-dots") && side == 1) || shape == "circle") {
@@ -304,7 +293,8 @@ MosaicScene::MosaicScene(const MosaicDesign& design, int scale, std::string_view
             for (int x = 0; x < 7; ++x)
                 finder_roles[std::size_t(row + y) * size + column + x] = x >= 2 && x <= 4 && y >= 2 && y <= 4 ? 2 : 1;
         if (module_shapes[1].empty()) {
-            const auto color = finder_ink(design, std::size_t(row + 3) * size + column + 3);
+            const auto center = (std::size_t(row + 3) * size + column + 3) * 3;
+            const std::array<std::uint8_t, 3> color{design.colors[center], design.colors[center + 1], design.colors[center + 2]};
             if (eye_frame == "dots" || eye_frame == "dashed")
                 primitives.push_back({eye_frame == "dots" ? "frame-dots" : "frame-dashed", column + 4, row + 4, 7, color, 15});
             else {
@@ -320,9 +310,7 @@ MosaicScene::MosaicScene(const MosaicDesign& design, int scale, std::string_view
             const auto role = finder_roles[index];
             const auto shape = module_shapes[role];
             if (shape.empty()) continue;
-            std::array<std::uint8_t, 3> color{};
-            if (role) color = finder_ink(design, index);
-            else if (design.writable[index]) std::copy_n(design.colors.begin() + index * 3, color.size(), color.begin());
+            const std::array<std::uint8_t, 3> color{design.colors[index * 3], design.colors[index * 3 + 1], design.colors[index * 3 + 2]};
             int corners = 15;
             if (shape == "connected-rounded" || shape == "horizontal-bars" || shape == "vertical-bars") {
                 const bool above = row > 0 && design.matrix[index - size];
@@ -338,8 +326,8 @@ MosaicScene::MosaicScene(const MosaicDesign& design, int scale, std::string_view
     }
     if (module_shapes[2].empty()) {
         for (const auto [row, column] : finders) {
-            const auto color = finder_ink(design, std::size_t(row + 3) * size + column + 3);
-            primitives.push_back({eye_ball, column + 6, row + 6, 3, color, 15});
+            const auto center = (std::size_t(row + 3) * size + column + 3) * 3;
+            primitives.push_back({eye_ball, column + 6, row + 6, 3, {design.colors[center], design.colors[center + 1], design.colors[center + 2]}, 15});
         }
     }
     std::map<std::tuple<std::string_view, int, int>, std::size_t> shapes;
