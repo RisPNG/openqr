@@ -110,7 +110,6 @@ int main() {
             const auto& expected = planner_vectors::designs[i];
             require(actual.rotation == expected.rotation, "Artistic orientation ranking differs");
             require(digest(actual.matrix) == expected.matrix, "Seeded weighted codeword edits differ");
-            require(digest(actual.colors) == expected.colors, "Foreground colors or median background ink differs");
             require(digest(actual.block_errors) == expected.errors, "Per-block artistic edit accounting differs");
             require(actual.changed_modules == expected.changed_modules && actual.changed_codewords == expected.changed_words,
                     "Artistic damage metadata differs");

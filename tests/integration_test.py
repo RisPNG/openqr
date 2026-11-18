@@ -152,6 +152,31 @@ def test_existing_logo_fixtures_and_reed_solomon_reserve(engine, filename):
     decode_frames(entry.image, entry.payload)
 
 
+def test_mosaic_distinguishes_pale_reference_colors_without_losing_the_payload(engine):
+    source = Image.new("RGB", (512, 512), (255, 224, 238))
+    drawing = ImageDraw.Draw(source)
+    drawing.ellipse((132, 92, 380, 401), fill=(255, 224, 184))
+    drawing.rectangle((125, 54, 393, 122), fill=(40, 40, 40))
+    data = io.BytesIO()
+    source.save(data, format="PNG")
+
+    payload = b"https://example.com/portrait"
+    entry = engine.generate(payload, data.getvalue(), version=14, scale=12, seed=42,
+                            body_shape="circle", eye_frame="follow-body", eye_ball="small-dots").results[0]
+    decode_frames(entry.image, payload)
+    assert all(errors <= capacity - 2 for errors, capacity in zip(entry.block_errors, entry.block_capacities))
+
+    with Image.open(io.BytesIO(entry.image)) as image:
+        modules = np.asarray(image.convert("RGB"), dtype=int)[54:-48:12, 54:-48:12]
+    pink = modules[26:44, 9:16].reshape(-1, 3)
+    peach = modules[26:44, 29:44].reshape(-1, 3)
+    pink = pink[np.any(pink < 255, axis=1)]
+    peach = peach[np.any(peach < 255, axis=1)]
+
+    assert len(pink) > 10 and len(peach) > 10
+    assert (pink[:, 2] - pink[:, 0]).mean() > (peach[:, 2] - peach[:, 0]).mean() + 15
+
+
 @pytest.mark.parametrize("image_format", ["PNG", "JPEG", "WEBP"])
 def test_still_picture_mode_decodes_common_input_formats(engine, reference_png, image_format):
     output = io.BytesIO()

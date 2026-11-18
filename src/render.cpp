@@ -293,12 +293,10 @@ MosaicScene::MosaicScene(const MosaicDesign& design, int scale, std::string_view
             for (int x = 0; x < 7; ++x)
                 finder_roles[std::size_t(row + y) * size + column + x] = x >= 2 && x <= 4 && y >= 2 && y <= 4 ? 2 : 1;
         if (module_shapes[1].empty()) {
-            const auto center = (std::size_t(row + 3) * size + column + 3) * 3;
-            const std::array<std::uint8_t, 3> color{design.colors[center], design.colors[center + 1], design.colors[center + 2]};
             if (eye_frame == "dots" || eye_frame == "dashed")
-                primitives.push_back({eye_frame == "dots" ? "frame-dots" : "frame-dashed", column + 4, row + 4, 7, color, 15});
+                primitives.push_back({eye_frame == "dots" ? "frame-dots" : "frame-dashed", column + 4, row + 4, 7, {}, 15});
             else {
-                primitives.push_back({eye_frame, column + 4, row + 4, 7, color, 15});
+                primitives.push_back({eye_frame, column + 4, row + 4, 7, {}, 15});
                 primitives.push_back({eye_frame == "slanted" ? "square" : eye_frame, column + 5, row + 5, 5, {255, 255, 255}, 15});
             }
         }
@@ -310,7 +308,9 @@ MosaicScene::MosaicScene(const MosaicDesign& design, int scale, std::string_view
             const auto role = finder_roles[index];
             const auto shape = module_shapes[role];
             if (shape.empty()) continue;
-            const std::array<std::uint8_t, 3> color{design.colors[index * 3], design.colors[index * 3 + 1], design.colors[index * 3 + 2]};
+            const auto color = design.writable[index]
+                ? std::array<std::uint8_t, 3>{design.colors[index * 3], design.colors[index * 3 + 1], design.colors[index * 3 + 2]}
+                : std::array<std::uint8_t, 3>{};
             int corners = 15;
             if (shape == "connected-rounded" || shape == "horizontal-bars" || shape == "vertical-bars") {
                 const bool above = row > 0 && design.matrix[index - size];
@@ -326,8 +326,7 @@ MosaicScene::MosaicScene(const MosaicDesign& design, int scale, std::string_view
     }
     if (module_shapes[2].empty()) {
         for (const auto [row, column] : finders) {
-            const auto center = (std::size_t(row + 3) * size + column + 3) * 3;
-            primitives.push_back({eye_ball, column + 6, row + 6, 3, {design.colors[center], design.colors[center + 1], design.colors[center + 2]}, 15});
+            primitives.push_back({eye_ball, column + 6, row + 6, 3, {}, 15});
         }
     }
     std::map<std::tuple<std::string_view, int, int>, std::size_t> shapes;

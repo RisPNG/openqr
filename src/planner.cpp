@@ -65,7 +65,7 @@ MosaicReference prepare_mosaic_reference(const Image& source, int size) {
     const Image pixels = resize_image(source, size, size, true);
     MosaicReference reference;
     reference.size = size;
-    reference.colors.resize(size * size * 3);
+    reference.ink_colors.resize(size * size * 3);
     reference.target.resize(size * size);
     reference.weights.resize(size * size);
     reference.pixel_art = Image{size, size, std::vector<std::uint8_t>(size * size * 4, 255)};
@@ -73,11 +73,12 @@ MosaicReference prepare_mosaic_reference(const Image& source, int size) {
     std::array<double, 256> histogram{};
     for (int index = 0; index < size * size; ++index) {
         std::array<double, 3> color;
-        for (int channel = 0; channel < 3; ++channel) {
-            reference.colors[index * 3 + channel] = pixels.pixels[index * 4 + channel];
+        for (int channel = 0; channel < 3; ++channel)
             color[channel] = pixels.pixels[index * 4 + channel] / 255.0;
-        }
         const double luminance = color[0] * 0.299 + color[1] * 0.587 + color[2] * 0.114;
+        const double ink_scale = 1 / (1 + 0.65 * luminance);
+        for (int channel = 0; channel < 3; ++channel)
+            reference.ink_colors[index * 3 + channel] = static_cast<std::uint8_t>(std::nearbyint(pixels.pixels[index * 4 + channel] * ink_scale));
         const double darkness = std::max(1 - luminance, *std::max_element(color.begin(), color.end()) - *std::min_element(color.begin(), color.end()));
         levels[index] = static_cast<std::uint8_t>(std::nearbyint(darkness * 255));
         ++histogram[levels[index]];
@@ -108,7 +109,7 @@ MosaicReference prepare_mosaic_reference(const Image& source, int size) {
         reference.target[index] = levels[index] > threshold;
         if (reference.target[index]) {
             for (int channel = 0; channel < 3; ++channel)
-                reference.pixel_art.pixels[index * 4 + channel] = reference.colors[index * 3 + channel];
+                reference.pixel_art.pixels[index * 4 + channel] = pixels.pixels[index * 4 + channel];
         }
     }
     for (int row = 0; row < size; ++row) {
@@ -169,29 +170,7 @@ std::vector<MosaicDesign> design_mosaics(const QrCode& qr, const MosaicReference
     if (reference->size != size)
         throw std::invalid_argument("Artwork dimensions must match the QR matrix.");
 
-    std::array<double, 3> base_color{};
-    for (int channel = 0; channel < 3; ++channel) {
-        std::vector<double> foreground;
-        foreground.reserve(cells);
-        for (int index = 0; index < cells; ++index) {
-            if (reference->target[index])
-                foreground.push_back(reference->colors[index * 3 + channel] / 255.0);
-        }
-        if (!foreground.empty()) {
-            const std::size_t middle = foreground.size() / 2;
-            std::nth_element(foreground.begin(), foreground.begin() + middle, foreground.end());
-            base_color[channel] = foreground[middle];
-            if (foreground.size() % 2 == 0)
-                base_color[channel] = (base_color[channel] + *std::max_element(foreground.begin(), foreground.begin() + middle)) / 2;
-        }
-    }
-    std::vector<std::uint8_t> colors(cells * 3, 0);
-    if (color) {
-        for (int index = 0; index < cells; ++index) {
-            for (int channel = 0; channel < 3; ++channel)
-                colors[index * 3 + channel] = reference->target[index] ? reference->colors[index * 3 + channel] : static_cast<std::uint8_t>(std::nearbyint(base_color[channel] * 255));
-        }
-    }
+    const auto colors = color ? reference->ink_colors : std::vector<std::uint8_t>(cells * 3, 0);
 
     const std::size_t word_count = qr.codeword_blocks.size();
     std::vector<std::array<int, 8>> positions(word_count);

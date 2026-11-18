@@ -26,7 +26,7 @@ struct QrCode {
 
 struct MosaicReference {
     int size = 0;
-    std::vector<std::uint8_t> colors;
+    std::vector<std::uint8_t> ink_colors;
     std::vector<std::uint8_t> target;
     std::vector<double> weights;
     Image pixel_art;
