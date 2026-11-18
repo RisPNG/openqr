@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -29,6 +30,13 @@ struct Animation {
     int loop = 0;
 };
 
+struct PreparedArtwork {
+    Animation animation;
+    Image unadjusted;
+    std::array<std::uint8_t, 3> matte{255, 255, 255};
+    Image backdrop_overlay;
+};
+
 struct DecodeOptions {
     bool normalize_animation = false;
     bool input_limits = true;
@@ -41,9 +49,9 @@ std::vector<std::uint8_t> encode_apng(const Animation& animation);
 std::vector<std::uint8_t> encode_gif(const Animation& animation);
 Image resize_image(const Image& image, int width, int height, bool box = false);
 Animation normalize_reference(const Animation& reference);
-Animation prepare_reference(const Animation& reference, const Image* background,
-                            std::uint32_t background_rgba, bool color,
-                            double contrast, double brightness);
+PreparedArtwork prepare_reference(const Animation& reference, const Image* background,
+                                  std::uint32_t background_rgba, bool color,
+                                  double contrast, double brightness, bool mosaic);
 Image prepare_background(const Image& image);
 
 }

@@ -623,8 +623,9 @@ Image prepare_background(const Image& image) {
     return resample_image(image, 512, 512, false, left, top, left + side, top + side);
 }
 
-Animation prepare_reference(const Animation& reference, const Image* background,
-                            std::uint32_t background_rgba, bool color, double contrast, double brightness) {
+PreparedArtwork prepare_reference(const Animation& reference, const Image* background,
+                                  std::uint32_t background_rgba, bool color,
+                                  double contrast, double brightness, bool mosaic) {
     if (!std::isfinite(contrast) || contrast < .1 || contrast > 3 || !std::isfinite(brightness) || brightness < .1 || brightness > 3)
         throw ImageError("Contrast and brightness must be between 0.1 and 3.");
     Image backdrop{512, 512, std::vector<std::uint8_t>(512 * 512 * 4)};
@@ -634,14 +635,29 @@ Animation prepare_reference(const Animation& reference, const Image* background,
         backdrop.pixels[i + 2] = static_cast<std::uint8_t>(background_rgba >> 8);
         backdrop.pixels[i + 3] = static_cast<std::uint8_t>(background_rgba);
     }
-    if (background) composite_image(backdrop, prepare_background(*background));
+    PreparedArtwork result;
+    result.animation.loop = reference.loop;
+    if (background_rgba & 255) {
+        for (int c = 0; c < 3; ++c)
+            result.matte[c] = static_cast<std::uint8_t>(background_rgba >> (24 - c * 8));
+    }
+    if (background) {
+        Image overlay = prepare_background(*background);
+        composite_image(backdrop, overlay);
+        if (mosaic && result.matte != std::array<std::uint8_t, 3>{255, 255, 255})
+            result.backdrop_overlay = std::move(overlay);
+    }
     Image shaping{512, 512, std::vector<std::uint8_t>(512 * 512 * 4, 255)};
     composite_image(shaping, backdrop);
-    Animation result;
-    result.loop = reference.loop;
+    const bool adjust = !color || contrast != 1 || brightness != 1;
     for (const auto& frame : reference.frames) {
         Image image = shaping;
         composite_image(image, contain_reference(frame.image));
+        if (!adjust) {
+            result.animation.frames.push_back({std::move(image), frame.duration_ms});
+            continue;
+        }
+        if (mosaic) result.unadjusted = image;
         std::uint64_t luminance_sum = 0;
         for (std::size_t i = 0; i < image.pixels.size(); i += 4) {
             const auto luminance = static_cast<std::uint8_t>((19595U * image.pixels[i] + 38470U * image.pixels[i + 1]
@@ -656,7 +672,7 @@ Animation prepare_reference(const Animation& reference, const Image* background,
                 const int contrasted = std::clamp(static_cast<int>(mean + contrast_factor * (static_cast<int>(image.pixels[i + c]) - mean)), 0, 255);
                 image.pixels[i + c] = static_cast<std::uint8_t>(std::clamp(static_cast<int>(brightness_factor * contrasted), 0, 255));
             }
-        result.frames.push_back({std::move(image), frame.duration_ms});
+        result.animation.frames.push_back({std::move(image), frame.duration_ms});
     }
     return result;
 }

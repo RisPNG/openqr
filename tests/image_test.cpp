@@ -55,10 +55,10 @@ int main() {
         auto padded = openqr::normalize_reference(source);
         compare_pixels(padded.frames[0].image,
                        openqr::decode_image(load_fixture("pipeline-normalized.png")).frames[0].image, "Alpha-aware reference padding");
-        auto enhanced = openqr::prepare_reference(padded, nullptr, 0x203040ff, true, 1.3, .8);
-        compare_pixels(enhanced.frames[0].image,
+        auto enhanced = openqr::prepare_reference(padded, nullptr, 0x203040ff, true, 1.3, .8, false);
+        compare_pixels(enhanced.animation.frames[0].image,
                        openqr::decode_image(load_fixture("pipeline-enhanced.png")).frames[0].image, "Contrast and brightness");
-        compare_pixels(openqr::resize_image(enhanced.frames[0].image, 256, 256),
+        compare_pixels(openqr::resize_image(enhanced.animation.frames[0].image, 256, 256),
                        openqr::decode_image(load_fixture("pipeline-preview.png")).frames[0].image, "Lanczos preview");
         compare_pixels(openqr::prepare_background(openqr::decode_image(load_fixture("pipeline-background.png")).frames[0].image),
                        openqr::decode_image(load_fixture("pipeline-fit.png")).frames[0].image, "Background crop");

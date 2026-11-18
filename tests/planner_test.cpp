@@ -97,8 +97,12 @@ int main() {
                 }
             }
         }
-        const auto reference = openqr::prepare_mosaic_reference(image, size);
+        auto reference = openqr::prepare_mosaic_reference({{{{image, 100}}, 0}, {}, {255, 255, 255}, {}}, size);
         require(digest(reference.target) == planner_vectors::target, "Artwork darkness/threshold target differs");
+        require(reference.weights[0] > reference.weights[10 * size + 10],
+                "The backdrop interior should be more costly to fill than the colored interior");
+        for (std::size_t index = 0; index < reference.weights.size(); ++index)
+            reference.weights[index] = reference.contours[index] ? 5. : 1.;
         require(digest(reference.weights) == planner_vectors::weights, "Artwork contour weighting differs");
         const auto qr = openqr::encode_qr(bytes("https://example.com/#keep"), 14, 'H', 5);
         const auto canonical_hash = digest(qr.matrix);
@@ -139,7 +143,7 @@ int main() {
                 for (int channel = 0; channel < 3; ++channel)
                     flat.pixels[index * 4 + channel] = gray;
             }
-            const auto prepared = openqr::prepare_mosaic_reference(flat, 21);
+            const auto prepared = openqr::prepare_mosaic_reference({{{{flat, 100}}, 0}, {}, {255, 255, 255}, {}}, 21);
             require(std::all_of(prepared.target.begin(), prepared.target.end(), [gray](auto value) { return value == (gray == 127); }),
                     "Flat grayscale threshold introduced dithering or changed the 127/128 boundary");
         }

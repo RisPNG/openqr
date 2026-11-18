@@ -130,6 +130,42 @@ def test_follow_body_eyes_keep_existing_rounded_module_geometry(engine):
     assert engine.style_preview("eye_ball", "follow-body") == engine.style_preview("eye_ball", "dots")
 
 
+@pytest.mark.parametrize("eye_frame, eye_ball", [("follow-body", "follow-body"), ("square", "small-dots")])
+def test_mosaic_finder_frames_and_balls_follow_local_artwork_colors(engine, eye_frame, eye_ball):
+    source = Image.new("RGB", (256, 256))
+    corner_colors = ((224, 52, 96), (81, 181, 48), (37, 102, 218), (216, 169, 38))
+    for corner, color in enumerate(corner_colors):
+        row, column = divmod(corner, 2)
+        source.paste(color, (column * 128, row * 128, (column + 1) * 128, (row + 1) * 128))
+    data = io.BytesIO()
+    source.save(data, format="PNG")
+
+    scale = 12
+    payload = b"https://example.com/illustration"
+    entry = engine.generate(payload, data.getvalue(), version=8, scale=scale, seed=42,
+                            body_shape="circle", eye_frame=eye_frame, eye_ball=eye_ball).results[0]
+    decode_frames(entry.image, payload)
+    with Image.open(io.BytesIO(entry.image)) as image:
+        modules = np.asarray(image.convert("RGB"))[4 * scale + scale // 2:-4 * scale:scale, 4 * scale + scale // 2:-4 * scale:scale]
+    svg_fills = {element.get("fill") for element in ET.fromstring(entry.svg)}
+    finder = np.ones((7, 7), dtype=bool)
+    finder[1:-1, 1:-1] = False
+    finder[2:-2, 2:-2] = True
+    finder_count = 0
+    for corner, color in enumerate(corner_colors):
+        row, column = divmod(corner, 2)
+        y, x = row * (len(modules) - 7), column * (len(modules) - 7)
+        sample = modules[y:y + 7, x:x + 7]
+        if not np.array_equal(np.any(sample < 255, axis=2), finder):
+            continue
+        finder_count += 1
+        for ink in (sample[0, 3], sample[3, 3]):
+            assert np.ptp(ink) >= 10
+            np.testing.assert_array_equal(np.argsort(ink), np.argsort(color))
+            assert "#" + bytes(ink).hex() in svg_fills
+    assert finder_count == 3
+
+
 @pytest.mark.parametrize("payload", [b" leading and trailing \t\r\n", b"a\x00b\x01\x1f", "Contact: \u674e\u534e, caf\u00e9@\u4f8b\u5b50.test", "https://example.com/page?x=%20&y=1#exact"])
 def test_literal_payload_bytes_survive_generation_and_serialization(engine, payload):
     expected = payload.encode("utf-8") if isinstance(payload, str) else payload
@@ -175,6 +211,81 @@ def test_mosaic_distinguishes_pale_reference_colors_without_losing_the_payload(e
 
     assert len(pink) > 10 and len(peach) > 10
     assert (pink[:, 2] - pink[:, 0]).mean() > (peach[:, 2] - peach[:, 0]).mean() + 15
+
+
+@pytest.mark.parametrize(("background", "matte", "artwork"), [
+    ("transparent", (248, 249, 248), (252, 175, 123)),
+    ("#ffffff", (248, 249, 248), (252, 175, 123)),
+    ("#ed1c24", (240, 35, 41), (255, 255, 255)),
+])
+def test_mosaic_uses_fewer_dark_modules_for_colors_close_to_the_matte(engine, background, matte, artwork):
+    source = Image.new("RGB", (512, 512), matte)
+    drawing = ImageDraw.Draw(source)
+    drawing.rounded_rectangle((80, 80, 430, 360), radius=42, outline=(41, 55, 100), width=26)
+    drawing.rectangle((170, 155, 350, 282), fill=artwork)
+    data = io.BytesIO()
+    source.save(data, format="PNG")
+
+    payload = b"https://openqr.my"
+    options = dict(version=14, scale=12, seed=42, body_shape="circle",
+                   eye_frame="follow-body", eye_ball="small-dots", background_color=background)
+    batch = engine.generate(payload, data.getvalue(), **options)
+    entry = batch.results[0]
+    decode_frames(entry.image, payload)
+    assert all(errors <= capacity - 2 for errors, capacity in zip(entry.block_errors, entry.block_capacities))
+
+    with Image.open(io.BytesIO(entry.image)) as image:
+        modules = np.asarray(image.convert("RGB"), dtype=int)[54:-48:12, 54:-48:12]
+    dark = np.min(modules, axis=2) < 230
+    matte_density = dark[52:65, 10:61].mean()
+    artwork_density = dark[23:39, 26:47].mean()
+    assert matte_density < 0.39
+    assert artwork_density > matte_density + 0.07
+
+    regenerated = engine.generate(payload, batch.reference_input, **options).results[0]
+    assert regenerated.image == entry.image
+
+
+def test_flat_matte_does_not_trigger_artwork_search(engine):
+    source = Image.new("RGBA", (48, 32), (242, 39, 44, 255))
+    data = io.BytesIO()
+    source.save(data, format="PNG")
+    payload = b"Blank matte"
+    options = {"version": 10, "seed": 42, "background_color": "#ed1c24"}
+    plain = engine.generate(payload, **options).results[0]
+    matched = engine.generate(payload, data.getvalue(), **options).results[0]
+
+    decode_frames(matched.image, payload)
+    assert matched.image == plain.image
+    assert matched.layout_attempts == plain.layout_attempts
+    assert matched.changed_codewords == 0
+
+
+def test_mosaic_ignores_a_solid_color_hidden_by_an_opaque_backdrop_image(engine):
+    source = io.BytesIO()
+    background = io.BytesIO()
+    Image.new("RGBA", (128, 128), (0, 0, 0, 0)).save(source, format="PNG")
+    Image.new("RGBA", (128, 128), (237, 28, 36, 255)).save(background, format="PNG")
+    payload = b"Opaque backdrop"
+    options = dict(version=8, seed=42, background_image=background.getvalue())
+    red = engine.generate(payload, source.getvalue(), background_color="#ed1c24", **options).results[0]
+    blue = engine.generate(payload, source.getvalue(), background_color="#3030ab", **options).results[0]
+    decode_frames(red.image, payload)
+    assert red.image == blue.image
+    assert red.changed_codewords == blue.changed_codewords > 0
+
+
+def test_ink_in_a_near_red_region_stays_light_even_when_those_are_the_only_two_colors(engine):
+    source = io.BytesIO()
+    image = Image.new("RGB", (128, 128), (237, 28, 36))
+    ImageDraw.Draw(image).rectangle((64, 0, 127, 127), fill=(218, 21, 27))
+    image.save(source, format="PNG")
+    payload = b"Subtle red"
+    entry = engine.generate(payload, source.getvalue(), version=8, scale=12, seed=42,
+                            background_color="#ed1c24").results[0]
+    decode_frames(entry.image, payload)
+    with Image.open(io.BytesIO(entry.target_preview)) as target:
+        assert target.convert("RGB").getcolors() == [(target.width * target.height, (255, 255, 255))]
 
 
 @pytest.mark.parametrize("image_format", ["PNG", "JPEG", "WEBP"])

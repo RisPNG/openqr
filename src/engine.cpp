@@ -305,7 +305,8 @@ Batch generate(const openqr_request& request) {
     const bool color = (options.flags & OPENQR_COLOR) != 0;
     const std::span<const std::uint8_t> payload(request.payload.data, request.payload.size);
     const bool vary_url = (options.flags & OPENQR_VARY_URL) && can_vary_url(payload);
-    Animation reference;
+    PreparedArtwork artwork;
+    auto& reference = artwork.animation;
     if (request.reference.data) {
         reference = decode_image({request.reference.data, request.reference.size}, {.normalize_animation = true});
         if (options.mode == OPENQR_MOSAIC && reference.frames.size() > 1) throw std::invalid_argument("Use picture mode for an animated image.");
@@ -315,8 +316,9 @@ Batch generate(const openqr_request& request) {
         }
         auto normalized = normalize_reference(reference);
         batch.reference_input = normalized.frames.size() > 1 ? encode_apng(normalized) : encode_png(normalized.frames.front().image);
-        reference = prepare_reference(normalized, background.frames.empty() ? nullptr : &background.frames.front().image,
-                                      options.background_rgba, color, options.contrast, options.brightness);
+        artwork = prepare_reference(normalized, background.frames.empty() ? nullptr : &background.frames.front().image,
+                                    options.background_rgba, color, options.contrast, options.brightness,
+                                    options.mode == OPENQR_MOSAIC);
         batch.reference_preview = encode_png(resize_image(reference.frames.front().image, 256, 256));
     }
     const bool mosaic_rendering = reference.frames.empty() || options.mode == OPENQR_MOSAIC;
@@ -332,8 +334,9 @@ Batch generate(const openqr_request& request) {
         std::optional<MosaicReference> mosaic_reference;
         std::vector<std::uint8_t> target_preview;
         if (!reference.frames.empty() && mosaic_rendering) {
-            mosaic_reference = prepare_mosaic_reference(reference.frames.front().image, 17 + 4 * version);
+            mosaic_reference = prepare_mosaic_reference(artwork, 17 + 4 * version);
             target_preview = encode_png(mosaic_reference->pixel_art);
+            if (!mosaic_reference->has_artwork) mosaic_reference.reset();
         }
         std::uint32_t attempts = 0;
         bool accepted = false;

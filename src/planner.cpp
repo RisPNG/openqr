@@ -61,26 +61,76 @@ QrCode encode_qr(std::span<const std::uint8_t> payload, int version, char error_
     return qr;
 }
 
-MosaicReference prepare_mosaic_reference(const Image& source, int size) {
-    const Image pixels = resize_image(source, size, size, true);
+namespace {
+
+std::array<double, 3> oklab(const std::uint8_t* rgb) {
+    static const auto linear = [] {
+        std::array<double, 256> values{};
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const double value = i / 255.;
+            values[i] = value <= .04045 ? value / 12.92 : std::pow((value + .055) / 1.055, 2.4);
+        }
+        return values;
+    }();
+    const double r = linear[rgb[0]], g = linear[rgb[1]], b = linear[rgb[2]];
+    const double l = std::cbrt(.4122214708 * r + .5363325363 * g + .0514459929 * b);
+    const double m = std::cbrt(.2119034982 * r + .6806995451 * g + .1073969566 * b);
+    const double s = std::cbrt(.0883024619 * r + .2817188376 * g + .6299787005 * b);
+    return {
+        .2104542553 * l + .7936177850 * m - .0040720468 * s,
+        1.9779984951 * l - 2.4285922050 * m + .4505937099 * s,
+        .0259040371 * l + .7827717662 * m - .8086757660 * s
+    };
+}
+
+}
+
+MosaicReference prepare_mosaic_reference(const PreparedArtwork& artwork, int size) {
+    const Image pixels = resize_image(artwork.animation.frames.front().image, size, size, true);
+    const Image unadjusted = artwork.unadjusted.pixels.empty()
+        ? Image{} : resize_image(artwork.unadjusted, size, size, true);
+    const auto& comparison = unadjusted.pixels.empty() ? pixels : unadjusted;
+    const Image overlay = artwork.backdrop_overlay.pixels.empty()
+        ? Image{} : resize_image(artwork.backdrop_overlay, size, size, true);
+    constexpr std::array<double, 3> white{1, 0, 0};
+    const auto matte = oklab(artwork.matte.data());
+    const double matte_depth = std::hypot(white[0] - matte[0], matte[1], matte[2]);
+    const double matte_contrast = std::clamp((matte_depth - .065) / .235, 0., 1.);
     MosaicReference reference;
     reference.size = size;
     reference.ink_colors.resize(size * size * 3);
     reference.target.resize(size * size);
+    reference.contours.resize(size * size);
     reference.weights.resize(size * size);
     reference.pixel_art = Image{size, size, std::vector<std::uint8_t>(size * size * 4, 255)};
+    std::vector<double> matte_match(size * size);
     std::vector<std::uint8_t> levels(size * size);
     std::array<double, 256> histogram{};
     for (int index = 0; index < size * size; ++index) {
+        const auto appearance = oklab(comparison.pixels.data() + index * 4);
+        const double matte_visibility = overlay.pixels.empty() ? 1. : 1 - overlay.pixels[index * 4 + 3] / 255.;
+        const double distance = std::lerp(
+            std::hypot(appearance[0] - white[0], appearance[1], appearance[2]),
+            std::hypot(appearance[0] - matte[0], appearance[1] - matte[1], appearance[2] - matte[2]),
+            matte_visibility);
+        const double difference = std::clamp((distance - .035) / .03, 0., 1.);
+        const double match = 1 - difference * difference * (3 - 2 * difference);
+        matte_match[index] = match;
+        reference.has_artwork |= difference > 0;
         std::array<double, 3> color;
         for (int channel = 0; channel < 3; ++channel)
             color[channel] = pixels.pixels[index * 4 + channel] / 255.0;
         const double luminance = color[0] * 0.299 + color[1] * 0.587 + color[2] * 0.114;
         const double ink_scale = 1 / (1 + 0.65 * luminance);
-        for (int channel = 0; channel < 3; ++channel)
-            reference.ink_colors[index * 3 + channel] = static_cast<std::uint8_t>(std::nearbyint(pixels.pixels[index * 4 + channel] * ink_scale));
+        for (int channel = 0; channel < 3; ++channel) {
+            const double art_ink = color[channel] * ink_scale;
+            const double quiet_ink = .65 + .32 * (color[channel] - luminance);
+            reference.ink_colors[index * 3 + channel] = static_cast<std::uint8_t>(std::nearbyint(255 * std::lerp(art_ink, quiet_ink, match)));
+        }
         const double darkness = std::max(1 - luminance, *std::max_element(color.begin(), color.end()) - *std::min_element(color.begin(), color.end()));
-        levels[index] = static_cast<std::uint8_t>(std::nearbyint(darkness * 255));
+        const double contrast = std::min(1., 1.15 * distance);
+        const double tone = std::lerp(darkness, contrast, matte_contrast * matte_visibility);
+        levels[index] = static_cast<std::uint8_t>(std::nearbyint(tone * (1 - match) * 255));
         ++histogram[levels[index]];
     }
     std::array<double, 256> counts{}, moments{};
@@ -103,7 +153,7 @@ MosaicReference prepare_mosaic_reference(const Image& source, int size) {
         const double light_mean = moments[split] / counts[split];
         const double dark_mean = (moments.back() - moments[split]) / (counts.back() - counts[split]);
         if (dark_mean - light_mean >= 8)
-            threshold = std::min(threshold, split);
+            threshold = std::clamp(split, 12, threshold);
     }
     for (int index = 0; index < size * size; ++index) {
         reference.target[index] = levels[index] > threshold;
@@ -121,7 +171,10 @@ MosaicReference prepare_mosaic_reference(const Image& source, int size) {
                     high = std::max(high, static_cast<int>(reference.target[y * size + x]));
                 }
             }
-            reference.weights[row * size + column] = 1 + 4 * (high - low);
+            const int index = row * size + column;
+            reference.contours[index] = high != low;
+            reference.weights[index] = 1 + 4 * reference.contours[index]
+                + (reference.target[index] ? 0. : 2.5 * matte_match[index]);
         }
     }
     return reference;
@@ -213,6 +266,7 @@ std::vector<MosaicDesign> design_mosaics(const QrCode& qr, const MosaicReference
     for (int turn = 0; turn < 4; ++turn) {
         std::vector<int> rotation(cells);
         std::vector<std::uint8_t> target(cells);
+        std::vector<std::uint8_t> contours(cells);
         std::vector<double> weights(cells);
         for (int row = 0; row < size; ++row) {
             for (int column = 0; column < size; ++column) {
@@ -224,6 +278,7 @@ std::vector<MosaicDesign> design_mosaics(const QrCode& qr, const MosaicReference
                 default: rotation[index] = (size - 1 - column) * size + row; break;
                 }
                 target[index] = reference->target[rotation[index]];
+                contours[index] = reference->contours[rotation[index]];
                 weights[index] = reference->weights[rotation[index]];
             }
         }
@@ -273,7 +328,7 @@ std::vector<MosaicDesign> design_mosaics(const QrCode& qr, const MosaicReference
             std::vector<std::uint8_t> region(cells);
             int sample_count = 0;
             for (int index = 0; index < cells; ++index) {
-                region[index] = weights[index] == 1 && writable[index] && target[index] == tone;
+                region[index] = !contours[index] && writable[index] && target[index] == tone;
                 sample_count += region[index];
             }
             if (sample_count < 24)
